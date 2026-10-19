@@ -41,11 +41,31 @@ Local work uses the `demo-nkabom` project ID, so no Firebase login or credential
 | `npm run serve`           | Dev server only                               |
 | `npm run emulators`       | Builds functions, then runs emulators only    |
 | `npm run build:functions` | Compile Cloud Functions                       |
-| `npm test`                | Unit tests (Vitest)                           |
+| `npm test`                | App unit tests (Vitest)                       |
+| `npm run test:functions`  | Cloud Functions tests (Vitest)                |
 | `npm run lint`            | ESLint (TypeScript and templates)             |
 | `npm run format`          | Format with Prettier                          |
 | `npm run format:check`    | Check formatting without writing              |
 | `npm run build`           | Production build to `dist/nkabom-app/browser` |
+
+## Continuous integration
+
+GitHub Actions runs [.github/workflows/ci.yml](.github/workflows/ci.yml) on every pull request and on every push to `main`:
+
+| Job      | Runs                                                        |
+| -------- | ----------------------------------------------------------- |
+| Frontend | `ng lint`, Prettier check, app unit tests, production build |
+| Backend  | functions lint, Prettier check, functions tests, build      |
+| CI       | passes only if Frontend and Backend both pass               |
+
+To stop a failing check from being merged, require the **CI** check in the branch protection (or ruleset) for `main`. It is the only check that needs listing, even when later stories add jobs.
+
+To run the same checks locally:
+
+```sh
+npm run lint && npm run format:check && npm test -- --watch=false && npm run build \
+  && npm run test:functions && npm run build:functions
+```
 
 ## Configuration and secrets
 
