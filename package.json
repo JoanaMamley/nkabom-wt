@@ -13,7 +13,8 @@
     "format": "prettier --write . && npm --prefix functions run format",
     "format:check": "prettier --check . && npm --prefix functions run format:check",
     "postinstall": "npm --prefix functions install",
-    "build:functions": "npm --prefix functions run build"
+    "build:functions": "npm --prefix functions run build",
+    "test:functions": "npm --prefix functions test"
   },
   "prettier": {
     "printWidth": 100,
