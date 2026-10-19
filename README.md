@@ -1,6 +1,6 @@
-# Nkabom frontend
+# Nkabom app
 
-Angular PWA for Nkabom, the WomenTrust alumnae community. Requirements and backlog are in [docs/](docs/).
+Angular PWA and Firebase backend (Cloud Functions, Firestore rules) for Nkabom, the WomenTrust alumnae community. One repo holds both. Requirements and backlog are in [docs/](docs/).
 
 ## Prerequisites
 
@@ -14,29 +14,38 @@ npm install
 npm start
 ```
 
-`npm start` runs the Firebase Emulator Suite (Auth and Firestore) and the Angular dev server together:
+`npm start` runs the Firebase Emulator Suite (Auth, Firestore and Functions) and the Angular dev server together:
 
 | Service     | URL                   |
 | ----------- | --------------------- |
 | App         | http://localhost:4200 |
 | Emulator UI | http://127.0.0.1:4000 |
 | Auth        | http://127.0.0.1:9099 |
+| Functions   | http://127.0.0.1:5001 |
 | Firestore   | http://127.0.0.1:8080 |
 
 Local work uses the `demo-nkabom` project ID, so no Firebase login or credentials are needed. Emulator data is saved to `.emulator-data/` on exit and reloaded on the next start; delete the folder to start fresh.
 
+## Layout
+
+- `src/` Angular app
+- `functions/` Cloud Functions (TypeScript, its own `package.json`; `npm install` at the root installs both)
+- `firestore.rules`, `firebase.json` Firebase config
+- `docs/` requirements and backlog
+
 ## Scripts
 
-| Command                | What it does                              |
-| ---------------------- | ----------------------------------------- |
-| `npm start`            | Emulators plus dev server                 |
-| `npm run serve`        | Dev server only                           |
-| `npm run emulators`    | Emulators only                            |
-| `npm test`             | Unit tests (Vitest)                       |
-| `npm run lint`         | ESLint (TypeScript and templates)         |
-| `npm run format`       | Format with Prettier                      |
-| `npm run format:check` | Check formatting without writing          |
-| `npm run build`        | Production build to `dist/nkabom/browser` |
+| Command                   | What it does                                  |
+| ------------------------- | --------------------------------------------- |
+| `npm start`               | Emulators plus dev server                     |
+| `npm run serve`           | Dev server only                               |
+| `npm run emulators`       | Builds functions, then runs emulators only    |
+| `npm run build:functions` | Compile Cloud Functions                       |
+| `npm test`                | Unit tests (Vitest)                           |
+| `npm run lint`            | ESLint (TypeScript and templates)             |
+| `npm run format`          | Format with Prettier                          |
+| `npm run format:check`    | Check formatting without writing              |
+| `npm run build`           | Production build to `dist/nkabom-app/browser` |
 
 ## Configuration and secrets
 

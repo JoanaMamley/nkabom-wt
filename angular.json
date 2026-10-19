@@ -7,7 +7,7 @@
   },
   "newProjectRoot": "projects",
   "projects": {
-    "nkabom": {
+    "nkabom-app": {
       "projectType": "application",
       "schematics": {
         "@schematics/angular:component": {
@@ -66,10 +66,10 @@
           "builder": "@angular/build:dev-server",
           "configurations": {
             "production": {
-              "buildTarget": "nkabom:build:production"
+              "buildTarget": "nkabom-app:build:production"
             },
             "development": {
-              "buildTarget": "nkabom:build:development"
+              "buildTarget": "nkabom-app:build:development"
             }
           },
           "defaultConfiguration": "development"

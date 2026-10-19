@@ -58,3 +58,6 @@ firebase-debug.*.log
 service-account*.json
 *-service-account.json
 .runtimeconfig.json
+
+# Cloud Functions build output
+functions/lib/
