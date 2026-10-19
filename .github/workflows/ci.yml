@@ -1,0 +1,65 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  frontend:
+    name: Frontend
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npx ng lint
+      - run: npx prettier --check .
+      - run: npm test -- --watch=false
+      - run: npm run build
+
+  backend:
+    name: Backend
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    defaults:
+      run:
+        working-directory: functions
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: functions/package-lock.json
+      - run: npm ci
+      - run: npm run lint
+      - run: npm run format:check
+      - run: npm test
+      - run: npm run build
+
+  # The one check to require on pull requests. It runs even when a job above fails, because a
+  # skipped required check counts as passing. New jobs only need adding to `needs` and the test.
+  ci:
+    name: CI
+    if: always()
+    needs: [frontend, backend]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Require every job to pass
+        run: '[ "${{ needs.frontend.result }}" = success ] && [ "${{ needs.backend.result }}" = success ]'

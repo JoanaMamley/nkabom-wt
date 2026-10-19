@@ -1,0 +1,15 @@
+import { Environment } from './environment.model';
+
+// Production build. Real values are filled in by NKB-109 (staging and production projects).
+// Firebase web config identifies the project; it is not a secret, but keep server keys out of here.
+export const environment: Environment = {
+  production: true,
+  firebase: {
+    apiKey: '',
+    authDomain: '',
+    projectId: '',
+    storageBucket: '',
+    messagingSenderId: '',
+    appId: '',
+  },
+};
