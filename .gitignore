@@ -46,6 +46,7 @@ Thumbs.db
 # Firebase
 .firebase/
 .emulator-data/
+firebase-export-*/
 *-debug.log
 firebase-debug.*.log
 
