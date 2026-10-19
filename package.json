@@ -1,0 +1,59 @@
+{
+  "name": "nkabom",
+  "version": "0.0.0",
+  "scripts": {
+    "ng": "ng",
+    "start": "concurrently -k -n emulators,app -c magenta,cyan \"npm:emulators\" \"npm:serve\"",
+    "serve": "ng serve",
+    "emulators": "firebase emulators:start --only auth,firestore --import=./.emulator-data --export-on-exit=./.emulator-data",
+    "build": "ng build",
+    "watch": "ng build --watch --configuration development",
+    "test": "ng test",
+    "lint": "ng lint",
+    "format": "prettier --write .",
+    "format:check": "prettier --check ."
+  },
+  "prettier": {
+    "printWidth": 100,
+    "singleQuote": true,
+    "overrides": [
+      {
+        "files": "*.html",
+        "options": {
+          "parser": "angular"
+        }
+      }
+    ]
+  },
+  "private": true,
+  "packageManager": "npm@11.6.2",
+  "dependencies": {
+    "@angular/common": "^21.1.0",
+    "@angular/compiler": "^21.1.0",
+    "@angular/core": "^21.1.0",
+    "@angular/forms": "^21.1.0",
+    "@angular/platform-browser": "^21.1.0",
+    "@angular/router": "^21.1.0",
+    "firebase": "^13.0.0",
+    "rxjs": "~7.8.0",
+    "tslib": "^2.3.0"
+  },
+  "devDependencies": {
+    "@angular/build": "^21.1.2",
+    "@angular/cli": "^21.1.2",
+    "@angular/compiler-cli": "^21.1.0",
+    "@eslint/js": "^10.0.1",
+    "angular-eslint": "21.4.0",
+    "concurrently": "^10.0.6",
+    "eslint": "^10.3.0",
+    "firebase-tools": "^15.34.0",
+    "jsdom": "^27.1.0",
+    "prettier": "^3.9.10",
+    "typescript": "~5.9.2",
+    "typescript-eslint": "8.59.2",
+    "vitest": "^4.0.8"
+  },
+  "engines": {
+    "node": ">=22.12"
+  }
+}

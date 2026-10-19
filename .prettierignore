@@ -1,0 +1,7 @@
+dist
+coverage
+node_modules
+.angular
+.emulator-data
+package-lock.json
+docs

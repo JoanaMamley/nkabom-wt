@@ -1,0 +1,11 @@
+rules_version = '2';
+
+// Default deny (FR-1.12). Collections are opened up story by story,
+// starting with the data model in NKB-103.
+service cloud.firestore {
+  match /databases/{database}/documents {
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}
