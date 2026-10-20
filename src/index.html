@@ -6,7 +6,15 @@
     <base href="/" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <meta name="description" content="The WomenTrust alumnae community" />
-    <meta name="theme-color" content="#6b2d5c" />
+    <meta name="theme-color" content="#e95300" />
+    <script>
+      // Apply a saved light or dark choice before first paint, so there is no flash of the other
+      // mode (NKB-108). Without one, styles.scss follows the device setting.
+      try {
+        var theme = localStorage.getItem('nkabom-theme');
+        if (theme === 'light' || theme === 'dark') document.documentElement.dataset.theme = theme;
+      } catch (e) {}
+    </script>
     <link rel="icon" type="image/x-icon" href="favicon.ico" />
     <link rel="icon" type="image/svg+xml" href="icons/icon.svg" />
     <link rel="manifest" href="manifest.webmanifest" />

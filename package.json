@@ -16,7 +16,8 @@
     "build:functions": "npm --prefix functions run build",
     "test:functions": "npm --prefix functions test",
     "test:rules": "firebase emulators:exec --only firestore \"vitest run --config vitest.rules.config.ts\"",
-    "icons": "node scripts/generate-icons.mjs"
+    "icons": "node scripts/generate-icons.mjs",
+    "check:contrast": "node scripts/check-contrast.mjs"
   },
   "prettier": {
     "printWidth": 100,

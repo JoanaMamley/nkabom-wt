@@ -50,24 +50,25 @@ Local work uses the `demo-nkabom` project ID, so no Firebase login or credential
 | `npm run format:check`    | Check formatting without writing                      |
 | `npm run build`           | Production build to `dist/nkabom-app/browser`         |
 | `npm run icons`           | Regenerate the app icons from `public/icons/icon.svg` |
+| `npm run check:contrast`  | Check theme colours are readable in both modes        |
 
 ## Continuous integration
 
 GitHub Actions runs [.github/workflows/ci.yml](.github/workflows/ci.yml) on every pull request and on every push to `main`:
 
-| Job      | Runs                                                        |
-| -------- | ----------------------------------------------------------- |
-| Frontend | `ng lint`, Prettier check, app unit tests, production build |
-| Backend  | functions lint, Prettier check, functions tests, build      |
-| Rules    | Firestore security rules tests against the emulator         |
-| CI       | passes only if every job above passes                       |
+| Job      | Runs                                                                              |
+| -------- | --------------------------------------------------------------------------------- |
+| Frontend | `ng lint`, Prettier check, theme contrast check, app unit tests, production build |
+| Backend  | functions lint, Prettier check, functions tests, build                            |
+| Rules    | Firestore security rules tests against the emulator                               |
+| CI       | passes only if every job above passes                                             |
 
 To stop a failing check from being merged, require the **CI** check in the branch protection (or ruleset) for `main`. It is the only check that needs listing, even when later stories add jobs.
 
 To run the same checks locally:
 
 ```sh
-npm run lint && npm run format:check && npm test -- --watch=false && npm run build \
+npm run lint && npm run format:check && npm run check:contrast && npm test -- --watch=false && npm run build \
   && npm run test:functions && npm run build:functions && npm run test:rules
 ```
 
@@ -82,7 +83,7 @@ npm run lint && npm run format:check && npm test -- --watch=false && npm run bui
 
 Production builds are an installable PWA (FR-4.10): a web app manifest, icons and a service worker. Firebase Hosting serves the app over HTTPS.
 
-- **Manifest and icons:** [public/manifest.webmanifest](public/manifest.webmanifest) and [public/icons/](public/icons/). The icon is a placeholder "N" until there is a logo. Every PNG and `favicon.ico` are rendered from `public/icons/icon.svg`: replace the SVG, keeping the artwork inside the central 80% circle so it also works as a maskable icon, then run `npm run icons` (it needs Google Chrome; set `CHROME` to its path outside macOS). The theme colour `#6b2d5c` is set in the manifest and in `src/index.html`.
+- **Manifest and icons:** [public/manifest.webmanifest](public/manifest.webmanifest) and [public/icons/](public/icons/). The icon is a placeholder "N" until there is a logo. Every PNG and `favicon.ico` are rendered from `public/icons/icon.svg`: replace the SVG, keeping the artwork inside the central 80% circle so it also works as a maskable icon, then run `npm run icons` (it needs Google Chrome; set `CHROME` to its path outside macOS). The brand colour `#e95300` is also set in the manifest, `src/index.html` and `src/app/core/theme.ts`; the site colours live in `src/styles.scss` (see [Light and dark theme](#light-and-dark-theme)).
 - **Service worker:** the app registers [public/sw.js](public/sw.js), which loads Angular's service worker ([ngsw-config.json](ngsw-config.json)). Push handling for NKB-509 goes in the same file. Keep the name `sw.js`: changing the registered script strands installed copies on the old worker. It is on in production builds only, so `ng serve` always shows the latest code.
 - **Offline:** the service worker caches the app, so it opens without a connection. While the device is offline, an offline page covers the current page. The page underneath stays in place, so a half-filled form survives a dropped connection.
 - **Updates:** after a deploy, open copies keep the version they started with, and a bar offers to reload once the new version has downloaded.
@@ -99,6 +100,15 @@ The app is then at http://localhost:5050 (not 5000, which macOS uses for AirPlay
 Until NKB-109 fills in `src/environments/environment.ts`, a production build stops at startup with `auth/invalid-api-key`. To try it before then, temporarily use the demo values from `environment.development.ts` and do not commit them.
 
 Installing: on Android, Chrome offers **Install app** (or **Add to Home screen**). On iPhone, Safari: **Share > Add to Home Screen**. iOS uses `apple-touch-icon.png`, not the manifest icons. Lighthouse 12 removed its PWA category, so check installability in Chrome DevTools under **Application > Manifest**, which lists any installability errors.
+
+## Light and dark theme
+
+Every page has a light and a dark mode (FR-8.8 to FR-8.10). On a first visit the site follows the device setting; once someone presses the toggle in the header, their choice is saved in the browser (`localStorage`, key `nkabom-theme`) and applies to every page and open tab on that device.
+
+- **Colours** live only in [src/styles.scss](src/styles.scss), as CSS custom properties (`--color-bg`, `--color-text`, `--color-primary` and so on), with a light and a dark value each. Components use the properties, never raw colours, so new screens work in both modes.
+- **Brand colour** is `#e95300`. White text on it is too faint (3.68:1), so buttons use dark text (`--color-on-primary`), and links in light mode use the deeper `#b84200`.
+- **Contrast:** `npm run check:contrast` checks every text colour against both backgrounds at WCAG AA (4.5:1) and borders and controls at 3:1, in both modes. CI runs it, so a colour change that makes text hard to read fails the build.
+- **No flash:** a small inline script in `src/index.html` applies a saved choice before the page first paints. [src/app/core/theme.ts](src/app/core/theme.ts) takes over once the app starts, and also sets the browser bar colour.
 
 ## Photo storage (Cloudflare R2)
 

@@ -1,1 +1,78 @@
-/* You can add global styles to this file, and also import other style files */
+// Light and dark theme (NKB-108, FR-8.8 to FR-8.10). Pages use these custom properties, never raw
+// colours, so both modes stay readable. The brand colour is #e95300 (--color-primary). White text
+// on it is too faint for normal-size text (3.68:1), so buttons put dark text on it, and links in
+// light mode use the deeper #b84200. npm run check:contrast checks every text colour against
+// both backgrounds (WCAG AA: 4.5:1 for text, 3:1 for borders and controls); CI runs it too.
+//
+// With no saved choice the device setting decides (prefers-color-scheme). A saved choice sets
+// data-theme on <html>: the inline script in index.html applies it before first paint, and the
+// Theme service (src/app/core/theme.ts) after that.
+
+@mixin light-colors {
+  --color-bg: #ffffff;
+  --color-surface: #fbf6f2;
+  --color-text: #1f1a17;
+  --color-text-muted: #5e554f;
+  --color-border: #8f847c;
+  --color-primary: #e95300;
+  --color-on-primary: #1f1a17;
+  --color-link: #b84200;
+  --color-focus: #b84200;
+  --color-error: #b3261e;
+  --color-success: #1e6b3a;
+  --color-warning: #8a5a00;
+}
+
+@mixin dark-colors {
+  --color-bg: #16120f;
+  --color-surface: #231c18;
+  --color-text: #f1e9e4;
+  --color-text-muted: #b8ada6;
+  --color-border: #81756d;
+  --color-primary: #e95300;
+  --color-on-primary: #1f1a17;
+  --color-link: #ff8c4d;
+  --color-focus: #ff8c4d;
+  --color-error: #ffb4ab;
+  --color-success: #7dd89b;
+  --color-warning: #f0c060;
+}
+
+:root {
+  color-scheme: light;
+  @include light-colors;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme='light']) {
+    color-scheme: dark;
+    @include dark-colors;
+  }
+}
+
+:root[data-theme='dark'] {
+  color-scheme: dark;
+  @include dark-colors;
+}
+
+body {
+  margin: 0;
+  background: var(--color-bg);
+  color: var(--color-text);
+  font-family:
+    system-ui,
+    -apple-system,
+    'Segoe UI',
+    Roboto,
+    sans-serif;
+  line-height: 1.5;
+}
+
+a {
+  color: var(--color-link);
+}
+
+:focus-visible {
+  outline: 2px solid var(--color-focus);
+  outline-offset: 2px;
+}

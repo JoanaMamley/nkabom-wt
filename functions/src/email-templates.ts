@@ -118,7 +118,7 @@ export function renderEmail<T extends EmailTemplate>(
 
   const p = (line: string) => `<p style="margin:0 0 16px">${escapeHtml(line)}</p>`;
   const button = action
-    ? `<p style="margin:0 0 16px"><a href="${escapeHtml(action.url)}" style="display:inline-block;padding:10px 18px;background:#6b2d5c;color:#ffffff;text-decoration:none;border-radius:6px">${escapeHtml(action.label)}</a></p>`
+    ? `<p style="margin:0 0 16px"><a href="${escapeHtml(action.url)}" style="display:inline-block;padding:10px 18px;background:#e95300;color:#1f1a17;text-decoration:none;border-radius:6px">${escapeHtml(action.label)}</a></p>`
     : '';
   const html = [
     '<!doctype html>',

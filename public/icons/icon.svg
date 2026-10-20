@@ -1,6 +1,6 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
   <!-- Placeholder mark until there is a logo. Full-bleed, with the letter inside the central 80%
        circle, so it also works as a maskable icon. Run npm run icons after changing it. -->
-  <rect width="512" height="512" fill="#6b2d5c" />
+  <rect width="512" height="512" fill="#e95300" />
   <path fill="#ffffff" d="M176 356V156h48l64 126V156h48v200h-48l-64-126v126z" />
 </svg>
