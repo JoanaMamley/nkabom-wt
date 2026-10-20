@@ -120,6 +120,38 @@ Once per Firebase project (staging and production), in the executives' Cloudflar
 
 To use a real bucket from the emulators, put the three values in `functions/.secret.local` (git-ignored) as `NAME=value` lines.
 
+## Email
+
+Cloud Functions send every email through `sendEmail` in [functions/src/email.ts](functions/src/email.ts), using a template from [functions/src/email-templates.ts](functions/src/email-templates.ts), the one place email wording lives (FR-8.5):
+
+```ts
+await sendEmail({ email, name }, 'registrationApproved', { firstName, appUrl });
+```
+
+A function that sends email must list the provider's secret: `onCall({ secrets: emailSecrets }, ...)`. Each template gives its text once, and both the plain-text and HTML versions are built from it, with typed-in values escaped. To add an email, add a template there; TypeScript then checks every caller's data.
+
+A failed send is logged to Cloud Logging as `Email send failed`, with the provider, template, recipient and error but not the body, since that may hold a one-time link. The error is then thrown, so the caller can retry or fall back.
+
+| Setting           | Kind   | Value                                                                  |
+| ----------------- | ------ | ---------------------------------------------------------------------- |
+| `EMAIL_PROVIDER`  | string | `brevo` (default), or `log` to write emails to the Functions log       |
+| `EMAIL_FROM`      | string | Sender address, on a domain verified with the provider                 |
+| `EMAIL_FROM_NAME` | string | Sender name (default `Nkabom`)                                         |
+| `BREVO_API_KEY`   | secret | Brevo API key, set with `firebase functions:secrets:set BREVO_API_KEY` |
+
+The emulators use `log` (set in `functions/.env.demo-nkabom`), so nothing is sent locally: emails, links included, show in the Functions log in the Emulator UI. Never use `log` in a deployed project.
+
+To switch provider, add a function for it in [functions/src/email-providers.ts](functions/src/email-providers.ts) and a case in `email.ts`, then change `EMAIL_PROVIDER`. Callers and templates do not change.
+
+### Setting up Brevo
+
+Brevo's free plan sends up to 300 emails a day. Once per Firebase project (staging and production):
+
+1. Create a Brevo account with the shared project Google account (NKB-113).
+2. **Senders, domains and dedicated IPs > Domains**: add the sending domain and add the DNS records Brevo shows (DKIM, DMARC, and the Brevo code), so mail is not marked as spam.
+3. **SMTP & API > API keys**: create a key, then run `firebase functions:secrets:set BREVO_API_KEY`.
+4. The first deploy asks for `EMAIL_FROM`, an address on that domain.
+
 ## Data model
 
 Types and collection names live in [functions/src/model.ts](functions/src/model.ts). [firestore.rules](firestore.rules) validates the same shapes, so change the two together.
