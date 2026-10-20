@@ -79,9 +79,16 @@ npm run lint && npm run format:check && npm test -- --watch=false && npm run bui
 
 Types and collection names live in [functions/src/model.ts](functions/src/model.ts). [firestore.rules](firestore.rules) validates the same shapes, so change the two together.
 
-| Collection      | Document ID | Holds                                                                 | Written by                        |
-| --------------- | ----------- | --------------------------------------------------------------------- | --------------------------------- |
-| `users/{uid}`   | Auth UID    | Role: `member`, `admin` or `primaryAdmin`                             | Cloud Functions only              |
-| `members/{uid}` | Auth UID    | Profile, and status: `pending`, `active`, `rejected` or `deactivated` | The member creates it, as pending |
+| Collection      | Document ID | Holds                                                                 | Written by                                    |
+| --------------- | ----------- | --------------------------------------------------------------------- | --------------------------------------------- |
+| `users/{uid}`   | Auth UID    | Role: `member`, `admin` or `primaryAdmin`                             | Cloud Functions only                          |
+| `members/{uid}` | Auth UID    | Profile, and status: `pending`, `active`, `rejected` or `deactivated` | The member creates it, as pending             |
+| `auditLog/{id}` | Auto ID     | Admin actions: actor, action, target, time                            | Cloud Functions only, never edited or deleted |
+
+To record an admin action from a Cloud Function, call `recordAudit` from [functions/src/audit.ts](functions/src/audit.ts):
+
+```ts
+await recordAudit(request.auth, 'registration.approve', { type: 'member', id: uid });
+```
 
 Using the user ID as the document ID means a user can have only one profile: the rules deny a second write. The `createUserRecord` function writes a `member` record for every new account. Anything the rules do not open is denied (FR-1.12). The rules tests in `tests/` start each case from an empty emulator database.

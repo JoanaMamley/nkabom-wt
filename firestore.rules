@@ -42,5 +42,11 @@ service cloud.firestore {
         return value is string && value.trim().size() > 0 && value.size() <= maxLength;
       }
     }
+
+    // auditLog/{entryId}: admin actions (FR-8.3). Only Cloud Functions add entries, and no one
+    // can edit or delete them from the app. Admins get read access for the viewer in NKB-406.
+    match /auditLog/{entryId} {
+      allow read, write: if false;
+    }
   }
 }

@@ -19,6 +19,7 @@ import {
 import { afterAll, beforeAll, beforeEach, describe, it } from 'vitest';
 
 import {
+  AUDIT_LOG,
   MAX_YEARS_TO_GRADUATION,
   MEMBERS,
   MIN_GRADUATION_YEAR,
@@ -174,6 +175,42 @@ describe('members', () => {
     await assertSucceeds(
       setDoc(doc(as('kofi'), MEMBERS, 'kofi'), newProfile({ graduationYear: last })),
     );
+  });
+});
+
+describe('auditLog', () => {
+  const entry = {
+    actor: { uid: 'efua', name: 'Efua Asante', email: 'efua@example.com' },
+    action: 'registration.approve',
+    target: { type: 'member', id: 'ama' },
+    details: null,
+  };
+
+  beforeEach(() => seed(`${AUDIT_LOG}/entry1`, { ...entry, at: Timestamp.now() }));
+
+  // Role claims arrive in NKB-208; even a token claiming the top role must not touch the log.
+  const primaryAdmin = () => env.authenticatedContext('efua', { role: 'primaryAdmin' }).firestore();
+
+  it('cannot be edited or deleted from the app', async () => {
+    const existing = doc(primaryAdmin(), AUDIT_LOG, 'entry1');
+
+    await assertFails(updateDoc(existing, { action: 'member.edit' }));
+    await assertFails(setDoc(existing, { ...entry, at: serverTimestamp() }));
+    await assertFails(deleteDoc(existing));
+  });
+
+  it('cannot be added to from the app', async () => {
+    await assertFails(
+      setDoc(doc(primaryAdmin(), AUDIT_LOG, 'entry2'), { ...entry, at: serverTimestamp() }),
+    );
+    await assertFails(
+      setDoc(doc(as('ama'), AUDIT_LOG, 'entry2'), { ...entry, at: serverTimestamp() }),
+    );
+  });
+
+  it('cannot be read from the app yet', async () => {
+    await assertFails(getDoc(doc(primaryAdmin(), AUDIT_LOG, 'entry1')));
+    await assertFails(getDocs(collection(primaryAdmin(), AUDIT_LOG)));
   });
 });
 
