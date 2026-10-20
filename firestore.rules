@@ -45,6 +45,15 @@ service cloud.firestore {
       }
     }
 
+    // directory/{uid}: the limited profile of each active member (FR-3.1, FR-5.2), copied from
+    // members/{uid} by the syncDirectoryEntry function, its only writer. Only active members can
+    // read it, and being active is what gives a member an entry of their own (FR-2.9). Members never
+    // read the full record: members/{uid} stays readable only by its owner.
+    match /directory/{uid} {
+      allow read: if request.auth != null
+        && exists(/databases/$(database)/documents/directory/$(request.auth.uid));
+    }
+
     // auditLog/{entryId}: admin actions (FR-8.3). Only Cloud Functions add entries, and no one
     // can edit or delete them from the app. Admins get read access for the viewer in NKB-406.
     match /auditLog/{entryId} {
