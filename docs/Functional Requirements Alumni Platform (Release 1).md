@@ -160,11 +160,12 @@ The constitution text is not yet in hand. These requirements cover how the platf
 - **Backend:** Firebase: Authentication (email, Google, and Facebook), Cloud Functions (approvals, admin accounts, signed photo links, Excel import and exports, birthday calendar sync, directory record sync, scheduled reminders, and email), and Cloud Messaging (push).
 - **Database:** Firestore, with full member records in an admin-only collection and a limited directory record that members can read (FR-3.1, FR-5.2), enforced by Firestore security rules with automated tests.
 
+* **Email:** Brevo's transactional email API, called from Cloud Functions, with templates kept in one place in the codebase (FR-8.5). Its free plan allows 300 emails a day.
 * **Photo storage:** Cloudflare R2, a private bucket, with short-lived signed URLs issued by a Cloud Function (FR-2.3, FR-8.2).
 * **Cost target:** under $5 a month. Cloud Functions require Firebase's pay-as-you-go Blaze plan, which needs a card on file even though usage should stay within the free quotas, so a budget alert guards the target.
 
 - **Development and backups:** the Firebase Emulator Suite for local development and automated tests, and scheduled Firestore exports for backups (FR-8.6).
-- **Accounts:** a shared project Google account, created by the developer, owns the Firebase projects, the Google Cloud project for the birthday calendar, and the Cloudflare account for R2. Its access and recovery details go in the admin handbook (FR-8.7).
+- **Accounts:** a shared project Google account, created by the developer, owns the Firebase projects, the Google Cloud project for the birthday calendar, the Cloudflare account for R2, and the Brevo account for email. Its access and recovery details go in the admin handbook (FR-8.7).
 
 ## Deferred to later releases
 
@@ -184,5 +185,5 @@ The developer decides each of these.
 4. Whether storing birthdays in Google Calendar counts as a transfer of data abroad that the privacy notice needs to cover.
 5. Google's Calendar API pricing page mentions possible charges for exceeding quotas later in 2026. Usage is far below any limit, but check the page before launch.
 6. How the constitution text affects this list. Once the text is in hand, read it against these requirements before building section 6, since it may define alumna eligibility, executive roles, or election rules that change FR-2.9, section 1, or the voting feature later.
-7. Which email provider sends messages from Cloud Functions (FR-8.5).
+7. ~~Which email provider sends messages from Cloud Functions (FR-8.5).~~ Decided: Brevo, whose free plan allows 300 emails a day. The provider can be swapped by configuration (NKB-106).
 8. Which payment card goes on the Firebase Blaze plan and the Cloudflare account, since both require one on file even within the free tiers.
