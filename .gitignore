@@ -55,6 +55,8 @@ firebase-debug.*.log
 .env.*
 !.env.example
 !functions/.env.demo-nkabom
+!functions/.env.nkabom-staging
+!functions/.env.nkabom-prod
 .secret.local
 *.pem
 *.key
