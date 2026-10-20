@@ -2,15 +2,17 @@
 
 *Shape in, shape out.*
 
-Functional requirements, Release 1. Draft for the executives, 17 October 2026.
+Functional requirements, Release 1. 17 October 2026.
+
+**Decisions:** the developer makes every decision on this project, including the open ones at the end of this document. Nothing waits on sign-off from the executives.
 
 **Roles:** Member, Admin (Executive), Primary Admin (an admin with extra rights over admin accounts). There can be more than one Primary Admin.
 
 ## 1. Authentication and accounts
 
-- **FR-1.1** Members can register and log in with email and password, Google, Apple, or Facebook.
+- **FR-1.1** Members can register and log in with email and password, Google, or Facebook.
 - **FR-1.2** Email sign-ups must verify the email address before the account is active.
-- **FR-1.3** Logging in with a social provider whose email matches an existing account links to that account instead of creating a duplicate. The system must handle Apple's hidden relay email addresses.
+- **FR-1.3** Logging in with a social provider whose email matches an existing account links to that account instead of creating a duplicate.
 - **FR-1.4** Email/password accounts can reset their password via an emailed link.
 - **FR-1.5** The system has two roles, Member and Admin. A Primary Admin is an admin with the extra right to manage admin accounts.
 - **FR-1.6** The first Primary Admin account is created during initial system setup. A Primary Admin can create admin accounts by entering a name, a login email, and the Google account email to use for the birthday calendar (which can be the same address), and can deactivate or delete admin accounts.
@@ -117,7 +119,7 @@ Functional requirements, Release 1. Draft for the executives, 17 October 2026.
 
 ## 6. Alumni constitution
 
-The constitution text still needs to come from the executives. These requirements cover how the platform hosts it.
+The constitution text is not yet in hand. These requirements cover how the platform hosts it.
 
 - **FR-6.1** The site has a **Constitution** page, linked from the main navigation and the footer, visible only to logged-in users.
 - **FR-6.2** The constitution is displayed as readable text, organized by article and section with a clickable table of contents, and works well on mobile.
@@ -129,7 +131,7 @@ The constitution text still needs to come from the executives. These requirement
 - **FR-6.8** During registration, the member must read and tick an acknowledgment ("I have read and agree to the constitution") before the profile can be saved. The system records which version was accepted and when.
 - **FR-6.9** After a new version is published, every member must accept it on their next login. Until they do, they see only the new version and the accept button, and cannot use other parts of the site.
 - **FR-6.10** Admins can see which members have accepted which version, and who is still pending.
-- **FR-6.11 (to confirm)** Admins accept new versions too, but are not blocked from administrative duties until they have. Say so if you'd rather block them as well.
+- **FR-6.11 (open)** Admins accept new versions too, but are not blocked from administrative duties until they have. Whether to block them as well is an open decision (see the end of this document).
 
 ## 7. Coming-soon tabs
 
@@ -146,7 +148,7 @@ The constitution text still needs to come from the executives. These requirement
 - **FR-8.4** The system supports data deletion requests and a documented data retention rule.
 - **FR-8.5** Email templates are maintained in one place in the codebase or editable by admins.
 - **FR-8.6** The system includes automated backups and a documented restore procedure.
-- **FR-8.7** An admin handbook documents handover steps for when the executive team changes, including how to promote a new Primary Admin (FR-1.7), who owns the email and push-notification accounts, and where the Google Cloud project and service account for the birthday calendar are kept.
+- **FR-8.7** An admin handbook documents handover steps for when the executive team changes, including how to promote a new Primary Admin (FR-1.7), who owns the email and push-notification accounts, where the Google Cloud project and service account for the birthday calendar are kept, and how access to the shared project Google account is handed over.
 
 * **FR-8.8** The site has a light mode and a dark mode, and a toggle visible on every page, including login and sign-up, lets any user switch between them at any time.
 * **FR-8.9** On a first visit the site follows the device's light or dark setting. After a user switches, their choice is remembered on that device and applies across the whole site, including the admin dashboard.
@@ -155,25 +157,32 @@ The constitution text still needs to come from the executives. These requirement
 ## 9. Technology stack
 
 - **Frontend:** Angular, built as an installable PWA (FR-4.10) and hosted on Firebase Hosting.
-- **Backend:** Firebase: Authentication (email, Google, Apple, and Facebook), Cloud Functions (approvals, admin accounts, signed photo links, Excel import and exports, birthday calendar sync, directory record sync, scheduled reminders, and email), and Cloud Messaging (push).
+- **Backend:** Firebase: Authentication (email, Google, and Facebook), Cloud Functions (approvals, admin accounts, signed photo links, Excel import and exports, birthday calendar sync, directory record sync, scheduled reminders, and email), and Cloud Messaging (push).
 - **Database:** Firestore, with full member records in an admin-only collection and a limited directory record that members can read (FR-3.1, FR-5.2), enforced by Firestore security rules with automated tests.
 
 * **Photo storage:** Cloudflare R2, a private bucket, with short-lived signed URLs issued by a Cloud Function (FR-2.3, FR-8.2).
 * **Cost target:** under $5 a month. Cloud Functions require Firebase's pay-as-you-go Blaze plan, which needs a card on file even though usage should stay within the free quotas, so a budget alert guards the target.
 
 - **Development and backups:** the Firebase Emulator Suite for local development and automated tests, and scheduled Firestore exports for backups (FR-8.6).
-
-Still to decide before building: which email provider sends messages from Cloud Functions, whose card goes on the Firebase Blaze plan and the Cloudflare R2 account, since both require a payment method on file, and who owns the Firebase, Google Cloud, and Cloudflare accounts (the executives, as FR-8.7 requires).
+- **Accounts:** a shared project Google account, created by the developer, owns the Firebase projects, the Google Cloud project for the birthday calendar, and the Cloudflare account for R2. Its access and recovery details go in the admin handbook (FR-8.7).
 
 ## Deferred to later releases
 
 Voting, the opportunities board, events and announcements, success stories and spotlight, the giving-back tracker, and SMS notifications.
 
-## Still to confirm
+## Out of scope
+
+Sign in with Apple. It needs a paid Apple Developer account, which the cost target does not allow. iPhone users sign in with email and password, Google, or Facebook.
+
+## Open decisions
+
+The developer decides each of these.
 
 1. Whether admins are blocked until they accept a new constitution version (FR-6.11).
-2. Whether the executives want the optional WhatsApp channel (FR-4.17) at all.
+2. Whether to build the optional WhatsApp channel (FR-4.17) at all.
 3. The values for N pending requests (FR-5.10) and the registration reminder period (FR-2.11).
-4. Whether the group needs to register with Ghana's Data Protection Commission or falls under WomenTrust's registration, and whether storing birthdays in Google Calendar counts as a transfer of data abroad that the privacy notice needs to cover.
-5. Google's Calendar API pricing page mentions possible charges for exceeding quotas later in 2026. Your usage is far below any limit, but check the page before launch.
-6. The constitution text itself, which should be read against this list before you build, since it may define alumna eligibility, executive roles, or election rules that change FR-2.9, section 1, or the voting feature later.
+4. Whether storing birthdays in Google Calendar counts as a transfer of data abroad that the privacy notice needs to cover.
+5. Google's Calendar API pricing page mentions possible charges for exceeding quotas later in 2026. Usage is far below any limit, but check the page before launch.
+6. How the constitution text affects this list. Once the text is in hand, read it against these requirements before building section 6, since it may define alumna eligibility, executive roles, or election rules that change FR-2.9, section 1, or the voting feature later.
+7. Which email provider sends messages from Cloud Functions (FR-8.5).
+8. Which payment card goes on the Firebase Blaze plan and the Cloudflare account, since both require one on file even within the free tiers.

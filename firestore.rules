@@ -15,6 +15,7 @@ service cloud.firestore {
 
     // members/{uid}: the member's profile. The document ID is the user ID, so a user can create
     // only their own profile and only once: a second write is an update, which is denied (FR-2.6).
+    // The photo must be one uploaded to the member's own folder (functions/src/photos.ts).
     match /members/{uid} {
       allow get: if isSelf(uid);
       allow create: if isSelf(uid) && isNewProfile(request.resource.data);
@@ -32,7 +33,8 @@ service cloud.firestore {
           && data.graduationYear is int
           && data.graduationYear >= 1990
           && data.graduationYear <= request.time.year() + 8
-          && isText(data.photoPath, 200)
+          && data.photoPath is string
+          && data.photoPath.matches('photos/' + uid + '/[0-9a-f-]{36}[.](jpg|png|webp)')
           && data.status == 'pending'
           && data.createdAt == request.time
           && data.updatedAt == request.time;
