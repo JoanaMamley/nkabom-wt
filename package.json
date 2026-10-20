@@ -15,7 +15,8 @@
     "postinstall": "npm --prefix functions install",
     "build:functions": "npm --prefix functions run build",
     "test:functions": "npm --prefix functions test",
-    "test:rules": "firebase emulators:exec --only firestore \"vitest run --config vitest.rules.config.ts\""
+    "test:rules": "firebase emulators:exec --only firestore \"vitest run --config vitest.rules.config.ts\"",
+    "icons": "node scripts/generate-icons.mjs"
   },
   "prettier": {
     "printWidth": 100,
@@ -38,6 +39,7 @@
     "@angular/forms": "^21.1.0",
     "@angular/platform-browser": "^21.1.0",
     "@angular/router": "^21.1.0",
+    "@angular/service-worker": "^21.2.25",
     "firebase": "^13.0.0",
     "rxjs": "~7.8.0",
     "tslib": "^2.3.0"
