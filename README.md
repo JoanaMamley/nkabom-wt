@@ -36,21 +36,24 @@ Local work uses the `demo-nkabom` project ID, so no Firebase login or credential
 
 ## Scripts
 
-| Command                   | What it does                                          |
-| ------------------------- | ----------------------------------------------------- |
-| `npm start`               | Emulators plus dev server                             |
-| `npm run serve`           | Dev server only                                       |
-| `npm run emulators`       | Builds functions, then runs emulators only            |
-| `npm run build:functions` | Compile Cloud Functions                               |
-| `npm test`                | App unit tests (Vitest)                               |
-| `npm run test:functions`  | Cloud Functions tests (Vitest)                        |
-| `npm run test:rules`      | Firestore security rules tests (emulator)             |
-| `npm run lint`            | ESLint (TypeScript and templates)                     |
-| `npm run format`          | Format with Prettier                                  |
-| `npm run format:check`    | Check formatting without writing                      |
-| `npm run build`           | Production build to `dist/nkabom-app/browser`         |
-| `npm run icons`           | Regenerate the app icons from `public/icons/icon.svg` |
-| `npm run check:contrast`  | Check theme colours are readable in both modes        |
+| Command                     | What it does                                           |
+| --------------------------- | ------------------------------------------------------ |
+| `npm start`                 | Emulators plus dev server                              |
+| `npm run serve`             | Dev server only                                        |
+| `npm run emulators`         | Builds functions, then runs emulators only             |
+| `npm run build:functions`   | Compile Cloud Functions                                |
+| `npm test`                  | App unit tests (Vitest)                                |
+| `npm run test:functions`    | Cloud Functions tests (Vitest)                         |
+| `npm run test:rules`        | Firestore security rules tests (emulator)              |
+| `npm run lint`              | ESLint (TypeScript and templates)                      |
+| `npm run format`            | Format with Prettier                                   |
+| `npm run format:check`      | Check formatting without writing                       |
+| `npm run build`             | Production build to `dist/nkabom-app/browser`          |
+| `npm run build:staging`     | Same build, with the staging Firebase config           |
+| `npm run deploy:staging`    | Staging build, then deploy everything to staging       |
+| `npm run deploy:production` | Production build, then deploy everything to production |
+| `npm run icons`             | Regenerate the app icons from `public/icons/icon.svg`  |
+| `npm run check:contrast`    | Check theme colours are readable in both modes         |
 
 ## Continuous integration
 
@@ -75,9 +78,36 @@ npm run lint && npm run format:check && npm run check:contrast && npm test -- --
 ## Configuration and secrets
 
 - `src/environments/environment.development.ts` points the app at the emulators.
-- `src/environments/environment.ts` holds the production Firebase web config (filled in by NKB-109). The web config identifies the project and is not a secret.
+- `src/environments/environment.ts` and `environment.staging.ts` hold the production and staging Firebase web config. The web config identifies the project and is not a secret.
 - Server-side secrets (Cloudflare R2, email provider, Google service account) never go in this repo. `.env*`, `.secret.local`, key files and service account JSON are git-ignored.
-- `functions/.env.demo-nkabom` holds the non-secret Functions settings for the emulators, so they start without prompting. It is the one committed `.env` file; never put secrets in it.
+- `functions/.env.<project ID>` holds the non-secret Functions settings for that project: `demo-nkabom` for the emulators, `nkabom-staging` and `nkabom-prod` for the real projects. They are the only committed `.env` files; never put secrets in them.
+- Secrets are set per project with `firebase functions:secrets:set NAME --project staging` (or `production`) and kept in Google Cloud Secret Manager. A function only sees the secrets it lists in its options.
+
+## Environments and deploys
+
+| Alias        | Project ID       | Used for                                 |
+| ------------ | ---------------- | ---------------------------------------- |
+| `default`    | `demo-nkabom`    | Emulators only; there is no real project |
+| `staging`    | `nkabom-staging` | Trying changes against real services     |
+| `production` | `nkabom-prod`    | The live app                             |
+
+Both real projects belong to the shared project Google account (NKB-113) and are on the Blaze plan, which scheduled functions and Firestore exports need. Because the default alias is the demo project, a bare `firebase deploy` fails instead of reaching a real project: always name one.
+
+Deploy by hand with `npm run deploy:staging` or `npm run deploy:production`. Each builds the app with that project's config and deploys Hosting, Cloud Functions, and Firestore rules and indexes together. Sign in first with `npx firebase login`, using the shared project account. Automated deploys come in NKB-114.
+
+Firebase Hosting serves only HTTPS (FR-8.2): it redirects plain HTTP and sends a `Strict-Transport-Security` header itself, so `firebase.json` does not set one.
+
+### Setting up a project
+
+Once for each of `nkabom-staging` and `nkabom-prod`, signed in as the shared project account:
+
+1. In the [Firebase console](https://console.firebase.google.com), create the project with exactly that ID. If the ID is taken, choose another and change it in `.firebaserc`, the `functions/.env.<project ID>` file name, its `BACKUP_BUCKET`, and `.gitignore`.
+2. Upgrade to the Blaze plan and set a budget alert under **Usage and billing**.
+3. **Firestore Database > Create database** in production mode. The location cannot be changed later; use the same one for both projects and for the backup bucket.
+4. **Project settings > Your apps**: add a web app, then copy its config into `src/environments/environment.staging.ts` (staging) or `environment.ts` (production).
+5. Set the secrets for photos and email (see [Setting up a bucket](#setting-up-a-bucket) and [Setting up Brevo](#setting-up-brevo)), adding `--project staging` or `--project production`.
+6. Create the backup bucket (see [Backups](#backups)).
+7. Run `npm run deploy:staging` (or `deploy:production`). The first deploy asks for any setting missing from the `.env` file, such as `EMAIL_FROM`, and saves the answer there; commit it.
 
 ## Installable app (PWA)
 
@@ -97,7 +127,7 @@ npm run build && npx firebase emulators:start --only hosting --project demo-nkab
 
 The app is then at http://localhost:5050 (not 5000, which macOS uses for AirPlay Receiver).
 
-Until NKB-109 fills in `src/environments/environment.ts`, a production build stops at startup with `auth/invalid-api-key`. To try it before then, temporarily use the demo values from `environment.development.ts` and do not commit them.
+Until `src/environments/environment.ts` holds the real config (see [Setting up a project](#setting-up-a-project)), a production build stops at startup with `auth/invalid-api-key`. To try it before then, temporarily use the demo values from `environment.development.ts` and do not commit them.
 
 Installing: on Android, Chrome offers **Install app** (or **Add to Home screen**). On iPhone, Safari: **Share > Add to Home Screen**. iOS uses `apple-touch-icon.png`, not the manifest icons. Lighthouse 12 removed its PWA category, so check installability in Chrome DevTools under **Application > Manifest**, which lists any installability errors.
 
@@ -185,6 +215,58 @@ Brevo's free plan sends up to 300 emails a day. Once per Firebase project (stagi
 2. **Senders, domains and dedicated IPs > Domains**: add the sending domain and add the DNS records Brevo shows (DKIM, DMARC, and the Brevo code), so mail is not marked as spam.
 3. **SMTP & API > API keys**: create a key, then run `firebase functions:secrets:set BREVO_API_KEY`.
 4. The first deploy asks for `EMAIL_FROM`, an address on that domain.
+
+## Backups
+
+`backupFirestore` in [functions/src/backups.ts](functions/src/backups.ts) exports the whole Firestore database every day at 02:00 Accra time (FR-8.6), to `BACKUP_BUCKET/firestore/<UTC time>`, for example `gs://nkabom-prod-backups/firestore/2026-10-20T02-00-00Z`. A failed export is retried twice and logged in Cloud Logging. The bucket deletes exports after 30 days.
+
+Exports hold Firestore only. Photos are in R2 and Auth accounts in Firebase Auth, neither of which this covers.
+
+### Setting up the backup bucket
+
+Once per project, with the [gcloud CLI](https://cloud.google.com/sdk/docs/install) signed in as the shared project account. Set `PROJECT` to `nkabom-staging` or `nkabom-prod` and `LOCATION` to the Firestore location:
+
+```sh
+gcloud storage buckets create gs://$PROJECT-backups --project=$PROJECT --location=$LOCATION \
+  --uniform-bucket-level-access --public-access-prevention
+gcloud storage buckets update gs://$PROJECT-backups --lifecycle-file=scripts/backup-lifecycle.json
+
+# The function runs as the default compute service account. Let it start exports and write them.
+NUMBER=$(gcloud projects describe $PROJECT --format='value(projectNumber)')
+gcloud projects add-iam-policy-binding $PROJECT \
+  --member=serviceAccount:$NUMBER-compute@developer.gserviceaccount.com \
+  --role=roles/datastore.importExportAdmin
+gcloud storage buckets add-iam-policy-binding gs://$PROJECT-backups \
+  --member=serviceAccount:$NUMBER-compute@developer.gserviceaccount.com \
+  --role=roles/storage.admin
+```
+
+To check it, run the job now from **Cloud Scheduler** in the Google Cloud console (**Force run** on `firebase-schedule-backupFirestore-us-central1`), then see that a new folder appears in the bucket.
+
+### Restoring
+
+An import writes every document in the export over the document with the same path. It does not delete documents created since the export. Restore into a new database first, check it, and only then into `(default)`.
+
+1. Pick the export: `gcloud storage ls gs://$PROJECT-backups/firestore/`.
+2. Create a database to restore into, in the same location:
+
+   ```sh
+   gcloud firestore databases create --database=restore-check --location=$LOCATION --project=$PROJECT
+   gcloud firestore import gs://$PROJECT-backups/firestore/<time> --database=restore-check --project=$PROJECT
+   ```
+
+   The command waits until the import finishes. Follow a long one with `gcloud firestore operations list --database=restore-check --project=$PROJECT`.
+
+3. In the Firebase console, open the `restore-check` database and check the collections and a few documents you know.
+4. To put the data back in the live database, during a quiet time, run the same import without `--database`. Firestore rules do not apply to an import.
+5. Delete the check database: `gcloud firestore databases delete --database=restore-check --project=$PROJECT`.
+
+### Restore tests
+
+Test a restore on staging once a year and after any change to the backup set-up, then add a row here.
+
+| Date | Project | Export | Result |
+| ---- | ------- | ------ | ------ |
 
 ## Data model
 

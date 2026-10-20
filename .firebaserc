@@ -1,5 +1,7 @@
 {
   "projects": {
-    "default": "demo-nkabom"
+    "default": "demo-nkabom",
+    "staging": "nkabom-staging",
+    "production": "nkabom-prod"
   }
 }
