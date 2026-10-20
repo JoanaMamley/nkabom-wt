@@ -49,3 +49,46 @@ export interface MemberProfile {
   /** Last updated (FR-2.5). */
   updatedAt: Timestamp;
 }
+
+export const AUDIT_LOG = 'auditLog';
+
+// FR-8.3: the admin actions the audit log records. Add new actions here.
+export const AUDIT_ACTIONS = [
+  'admin.login',
+  'admin.create',
+  'admin.roleChange',
+  'admin.deactivate',
+  'admin.delete',
+  'registration.approve',
+  'registration.reject',
+  'member.edit',
+  'member.deactivate',
+  'member.delete',
+  'members.export',
+  'calendar.share',
+  'calendar.unshare',
+  'constitution.publish',
+] as const;
+export type AuditAction = (typeof AUDIT_ACTIONS)[number];
+
+export interface AuditTarget {
+  type: 'member' | 'admin' | 'constitution';
+  id: string;
+}
+
+/** Extra facts about an action, such as a rejection reason. Never a date of birth or a photo. */
+export type AuditDetails = Record<string, string | number | boolean | null>;
+
+/**
+ * auditLog/{autoId}: one admin action (FR-8.3). Only Cloud Functions write entries, and nothing
+ * edits or deletes them. The actor's name and email are copied in so the entry still reads
+ * correctly after the admin is renamed or deleted.
+ */
+export interface AuditEntry {
+  actor: { uid: string; name: string | null; email: string | null };
+  action: AuditAction;
+  /** Null for actions without one subject, such as an export. */
+  target: AuditTarget | null;
+  details: AuditDetails | null;
+  at: Timestamp;
+}
