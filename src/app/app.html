@@ -1,6 +1,20 @@
-<main>
-  <h1>Nkabom</h1>
-  <p>The WomenTrust alumnae community.</p>
-</main>
+@if (!online()) {
+  <app-offline-page />
+}
 
-<router-outlet />
+<!-- Hidden rather than removed while offline, so a half-filled form survives a dropped connection. -->
+<div [hidden]="!online()">
+  <main>
+    <h1>Nkabom</h1>
+    <p>The WomenTrust alumnae community.</p>
+  </main>
+
+  <router-outlet />
+</div>
+
+@if (updates.ready()) {
+  <div class="update" role="status">
+    <span>A new version of Nkabom is ready.</span>
+    <button type="button" (click)="updates.reload()">Reload</button>
+  </div>
+}

@@ -31,23 +31,25 @@ Local work uses the `demo-nkabom` project ID, so no Firebase login or credential
 - `src/` Angular app
 - `functions/` Cloud Functions (TypeScript, its own `package.json`; `npm install` at the root installs both)
 - `firestore.rules`, `firebase.json` Firebase config
+- `scripts/` one-off developer scripts, such as icon generation
 - `docs/` requirements and backlog
 
 ## Scripts
 
-| Command                   | What it does                                  |
-| ------------------------- | --------------------------------------------- |
-| `npm start`               | Emulators plus dev server                     |
-| `npm run serve`           | Dev server only                               |
-| `npm run emulators`       | Builds functions, then runs emulators only    |
-| `npm run build:functions` | Compile Cloud Functions                       |
-| `npm test`                | App unit tests (Vitest)                       |
-| `npm run test:functions`  | Cloud Functions tests (Vitest)                |
-| `npm run test:rules`      | Firestore security rules tests (emulator)     |
-| `npm run lint`            | ESLint (TypeScript and templates)             |
-| `npm run format`          | Format with Prettier                          |
-| `npm run format:check`    | Check formatting without writing              |
-| `npm run build`           | Production build to `dist/nkabom-app/browser` |
+| Command                   | What it does                                          |
+| ------------------------- | ----------------------------------------------------- |
+| `npm start`               | Emulators plus dev server                             |
+| `npm run serve`           | Dev server only                                       |
+| `npm run emulators`       | Builds functions, then runs emulators only            |
+| `npm run build:functions` | Compile Cloud Functions                               |
+| `npm test`                | App unit tests (Vitest)                               |
+| `npm run test:functions`  | Cloud Functions tests (Vitest)                        |
+| `npm run test:rules`      | Firestore security rules tests (emulator)             |
+| `npm run lint`            | ESLint (TypeScript and templates)                     |
+| `npm run format`          | Format with Prettier                                  |
+| `npm run format:check`    | Check formatting without writing                      |
+| `npm run build`           | Production build to `dist/nkabom-app/browser`         |
+| `npm run icons`           | Regenerate the app icons from `public/icons/icon.svg` |
 
 ## Continuous integration
 
@@ -75,6 +77,28 @@ npm run lint && npm run format:check && npm test -- --watch=false && npm run bui
 - `src/environments/environment.ts` holds the production Firebase web config (filled in by NKB-109). The web config identifies the project and is not a secret.
 - Server-side secrets (Cloudflare R2, email provider, Google service account) never go in this repo. `.env*`, `.secret.local`, key files and service account JSON are git-ignored.
 - `functions/.env.demo-nkabom` holds the non-secret Functions settings for the emulators, so they start without prompting. It is the one committed `.env` file; never put secrets in it.
+
+## Installable app (PWA)
+
+Production builds are an installable PWA (FR-4.10): a web app manifest, icons and a service worker. Firebase Hosting serves the app over HTTPS.
+
+- **Manifest and icons:** [public/manifest.webmanifest](public/manifest.webmanifest) and [public/icons/](public/icons/). The icon is a placeholder "N" until there is a logo. Every PNG and `favicon.ico` are rendered from `public/icons/icon.svg`: replace the SVG, keeping the artwork inside the central 80% circle so it also works as a maskable icon, then run `npm run icons` (it needs Google Chrome; set `CHROME` to its path outside macOS). The theme colour `#6b2d5c` is set in the manifest and in `src/index.html`.
+- **Service worker:** the app registers [public/sw.js](public/sw.js), which loads Angular's service worker ([ngsw-config.json](ngsw-config.json)). Push handling for NKB-509 goes in the same file. Keep the name `sw.js`: changing the registered script strands installed copies on the old worker. It is on in production builds only, so `ng serve` always shows the latest code.
+- **Offline:** the service worker caches the app, so it opens without a connection. While the device is offline, an offline page covers the current page. The page underneath stays in place, so a half-filled form survives a dropped connection.
+- **Updates:** after a deploy, open copies keep the version they started with, and a bar offers to reload once the new version has downloaded.
+- **Caching:** `firebase.json` serves `index.html`, app routes, the service worker files and the manifest with `Cache-Control: no-cache`, so the browser always checks for a new version.
+
+To try it locally, build and serve with the Hosting emulator, then open it in Chrome (`localhost` counts as secure, so the service worker runs):
+
+```sh
+npm run build && npx firebase emulators:start --only hosting --project demo-nkabom
+```
+
+The app is then at http://localhost:5050 (not 5000, which macOS uses for AirPlay Receiver).
+
+Until NKB-109 fills in `src/environments/environment.ts`, a production build stops at startup with `auth/invalid-api-key`. To try it before then, temporarily use the demo values from `environment.development.ts` and do not commit them.
+
+Installing: on Android, Chrome offers **Install app** (or **Add to Home screen**). On iPhone, Safari: **Share > Add to Home Screen**. iOS uses `apple-touch-icon.png`, not the manifest icons. Lighthouse 12 removed its PWA category, so check installability in Chrome DevTools under **Application > Manifest**, which lists any installability errors.
 
 ## Photo storage (Cloudflare R2)
 

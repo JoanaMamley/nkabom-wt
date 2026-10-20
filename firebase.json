@@ -2,6 +2,26 @@
   "hosting": {
     "public": "dist/nkabom-app/browser",
     "ignore": ["firebase.json", "**/.*", "**/node_modules/**"],
+    "headers": [
+      {
+        "source": "/@(index.html|sw.js|ngsw-worker.js|ngsw.json|safety-worker.js|manifest.webmanifest)",
+        "headers": [
+          {
+            "key": "Cache-Control",
+            "value": "no-cache"
+          }
+        ]
+      },
+      {
+        "source": "**/!(*.*)",
+        "headers": [
+          {
+            "key": "Cache-Control",
+            "value": "no-cache"
+          }
+        ]
+      }
+    ],
     "rewrites": [
       {
         "source": "**",
@@ -27,6 +47,9 @@
     },
     "functions": {
       "port": 5001
+    },
+    "hosting": {
+      "port": 5050
     }
   },
   "functions": [
