@@ -307,11 +307,22 @@ Test a restore on staging once a year and after any change to the backup set-up,
 
 Types and collection names live in [functions/src/model.ts](functions/src/model.ts). [firestore.rules](firestore.rules) validates the same shapes, so change the two together.
 
-| Collection      | Document ID | Holds                                                                 | Written by                                    |
-| --------------- | ----------- | --------------------------------------------------------------------- | --------------------------------------------- |
-| `users/{uid}`   | Auth UID    | Role: `member`, `admin` or `primaryAdmin`                             | Cloud Functions only                          |
-| `members/{uid}` | Auth UID    | Profile, and status: `pending`, `active`, `rejected` or `deactivated` | The member creates it, as pending             |
-| `auditLog/{id}` | Auto ID     | Admin actions: actor, action, target, time                            | Cloud Functions only, never edited or deleted |
+| Collection        | Document ID | Holds                                                                                   | Written by                                    |
+| ----------------- | ----------- | --------------------------------------------------------------------------------------- | --------------------------------------------- |
+| `users/{uid}`     | Auth UID    | Role: `member`, `admin` or `primaryAdmin`                                               | Cloud Functions only                          |
+| `members/{uid}`   | Auth UID    | Profile, and status: `pending`, `active`, `rejected` or `deactivated`                   | The member creates it, as pending             |
+| `directory/{uid}` | Auth UID    | Limited profile of an active member: name, photo, course or occupation, graduation year | `syncDirectoryEntry` only                     |
+| `auditLog/{id}`   | Auto ID     | Admin actions: actor, action, target, time                                              | Cloud Functions only, never edited or deleted |
+
+### Full records and the directory
+
+A member's full record, with date of birth and status, stays in `members/{uid}`, which only that member can read (and admins, from NKB-208). Other members see only `directory/{uid}`, which holds the FR-5.2 fields and nothing else (FR-3.1).
+
+The `syncDirectoryEntry` function in [functions/src/directory.ts](functions/src/directory.ts) runs on every write to `members/{uid}`. It lists a member once their status is `active`, copies changes to the listed fields, and removes the entry when the member is no longer active or the profile is deleted. It reads the profile again in a transaction rather than trusting the event, so a late or repeated event cannot leave an old entry behind, and a failed sync is retried. Only active members can read the directory, so pending members see nothing (FR-2.9).
+
+To show another field to members, add it to `DIRECTORY_FIELDS` in `model.ts` and check FR-5.2 and the privacy notice first. Date of birth and contact details must never be added.
+
+### Audit log
 
 To record an admin action from a Cloud Function, call `recordAudit` from [functions/src/audit.ts](functions/src/audit.ts):
 

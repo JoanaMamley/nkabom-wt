@@ -11,15 +11,18 @@ import {
   doc,
   getDoc,
   getDocs,
+  query,
   serverTimestamp,
   setDoc,
   Timestamp,
   updateDoc,
+  where,
 } from 'firebase/firestore';
 import { afterAll, beforeAll, beforeEach, describe, it } from 'vitest';
 
 import {
   AUDIT_LOG,
+  DIRECTORY,
   MAX_YEARS_TO_GRADUATION,
   MEMBERS,
   MIN_GRADUATION_YEAR,
@@ -194,6 +197,76 @@ describe('members', () => {
     await assertSucceeds(
       setDoc(doc(as('kofi'), MEMBERS, 'kofi'), newProfile({ graduationYear: last }, 'kofi')),
     );
+  });
+});
+
+describe('directory', () => {
+  function entry(firstNames: string, graduationYear = 2020) {
+    return {
+      firstNames,
+      surname: 'Mensah',
+      photoPath: photoOf(firstNames.toLowerCase()),
+      courseOrOccupation: 'Civil engineer',
+      graduationYear,
+    };
+  }
+
+  // Ama and Kofi are active, so the sync function has listed them. Esi is pending: she has a
+  // profile but no directory entry.
+  beforeEach(async () => {
+    await seed(`${DIRECTORY}/ama`, entry('Ama'));
+    await seed(`${DIRECTORY}/kofi`, entry('Kofi', 2015));
+    for (const [uid, status] of [
+      ['ama', 'active'],
+      ['kofi', 'active'],
+      ['esi', 'pending'],
+    ]) {
+      await seed(`${MEMBERS}/${uid}`, {
+        ...newProfile({ status }, uid),
+        createdAt: Timestamp.now(),
+      });
+    }
+  });
+
+  it("lets an active member read another member's directory entry", async () => {
+    await assertSucceeds(getDoc(doc(as('ama'), DIRECTORY, 'kofi')));
+  });
+
+  it('lets an active member list and filter the directory', async () => {
+    await assertSucceeds(getDocs(collection(as('ama'), DIRECTORY)));
+    await assertSucceeds(
+      getDocs(query(collection(as('ama'), DIRECTORY), where('graduationYear', '==', 2015))),
+    );
+  });
+
+  it("never lets an active member read another member's full record", async () => {
+    await assertFails(getDoc(doc(as('ama'), MEMBERS, 'kofi')));
+    await assertFails(getDocs(collection(as('ama'), MEMBERS)));
+    await assertFails(
+      getDocs(query(collection(as('ama'), MEMBERS), where('status', '==', 'active'))),
+    );
+  });
+
+  it('hides the directory from a pending member', async () => {
+    await assertFails(getDoc(doc(as('esi'), DIRECTORY, 'ama')));
+    await assertFails(getDocs(collection(as('esi'), DIRECTORY)));
+  });
+
+  it('hides the directory from a signed-in user without a profile', async () => {
+    await assertFails(getDocs(collection(as('yaw'), DIRECTORY)));
+  });
+
+  it('is closed when logged out', async () => {
+    const db = env.unauthenticatedContext().firestore();
+    await assertFails(getDoc(doc(db, DIRECTORY, 'ama')));
+    await assertFails(getDocs(collection(db, DIRECTORY)));
+  });
+
+  it('cannot be written from the app, so no one can list themselves or add fields', async () => {
+    await assertFails(setDoc(doc(as('esi'), DIRECTORY, 'esi'), entry('Esi')));
+    await assertFails(updateDoc(doc(as('ama'), DIRECTORY, 'ama'), { dateOfBirth: '1998-02-28' }));
+    await assertFails(updateDoc(doc(as('ama'), DIRECTORY, 'kofi'), { surname: 'Owusu' }));
+    await assertFails(deleteDoc(doc(as('ama'), DIRECTORY, 'kofi')));
   });
 });
 

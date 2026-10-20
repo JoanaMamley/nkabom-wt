@@ -59,6 +59,23 @@ export interface MemberProfile {
   updatedAt: Timestamp;
 }
 
+export const DIRECTORY = 'directory';
+
+// FR-5.2: the only profile fields other members may see. Never add date of birth or contact details.
+export const DIRECTORY_FIELDS = [
+  'firstNames',
+  'surname',
+  'photoPath',
+  'courseOrOccupation',
+  'graduationYear',
+] as const;
+
+/**
+ * directory/{uid}: the limited profile members see in the mentor directory (FR-3.1, FR-5.2). One
+ * per active member, copied from members/{uid} by syncDirectoryEntry; only that function writes it.
+ */
+export type DirectoryEntry = Pick<MemberProfile, (typeof DIRECTORY_FIELDS)[number]>;
+
 export const AUDIT_LOG = 'auditLog';
 
 // FR-8.3: the admin actions the audit log records. Add new actions here.

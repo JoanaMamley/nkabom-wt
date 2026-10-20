@@ -5,6 +5,7 @@ initializeApp();
 
 export { backupFirestore } from './backups';
 export { schedulerHeartbeat } from './scheduled';
+export { syncDirectoryEntry } from './directory';
 export { getPhotoDownloadUrl, getPhotoUploadUrl } from './photos';
 export { createUserRecord } from './users';
 
