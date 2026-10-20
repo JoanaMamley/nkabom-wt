@@ -4,6 +4,7 @@ import { provideServiceWorker } from '@angular/service-worker';
 import { App } from './app';
 import { AppUpdates } from './core/app-updates';
 import { Connectivity } from './core/connectivity';
+import { Theme } from './core/theme';
 
 describe('App', () => {
   const online = signal(true);
@@ -20,6 +21,7 @@ describe('App', () => {
         provideServiceWorker('sw.js', { enabled: false }),
         { provide: Connectivity, useValue: { online } },
         { provide: AppUpdates, useValue: updates },
+        { provide: Theme, useValue: { mode: signal('light'), toggle: vi.fn() } },
       ],
     }).compileComponents();
   });
@@ -39,6 +41,13 @@ describe('App', () => {
   it('should render title', async () => {
     const compiled = await render();
     expect(compiled.querySelector('h1')?.textContent).toContain('Nkabom');
+  });
+
+  it('shows the theme toggle on every page, offline included', async () => {
+    online.set(false);
+    const compiled = await render();
+
+    expect(compiled.querySelector('header app-theme-toggle button')).not.toBeNull();
   });
 
   it('shows the offline page over the current page while offline', async () => {

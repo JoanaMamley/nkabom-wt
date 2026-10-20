@@ -4,10 +4,11 @@ import { RouterOutlet } from '@angular/router';
 import { AppUpdates } from './core/app-updates';
 import { Connectivity } from './core/connectivity';
 import { OfflinePage } from './offline/offline-page';
+import { ThemeToggle } from './theme-toggle/theme-toggle';
 
 @Component({
   selector: 'app-root',
-  imports: [RouterOutlet, OfflinePage],
+  imports: [RouterOutlet, OfflinePage, ThemeToggle],
   templateUrl: './app.html',
   styleUrl: './app.scss',
 })

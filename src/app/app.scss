@@ -1,3 +1,20 @@
+.app-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0.5rem 1rem;
+  border-bottom: 3px solid var(--color-primary);
+  background: var(--color-surface);
+}
+
+main {
+  padding: 0 1rem;
+}
+
+.brand {
+  font-weight: 700;
+}
+
 .update {
   position: fixed;
   inset: auto 1rem 1rem;
@@ -9,6 +26,7 @@
   margin: 0 auto;
   padding: 0.75rem 1rem;
   border-radius: 0.5rem;
-  background: #222222;
-  color: #ffffff;
+  // The page colours swapped, so the bar stands out in both modes.
+  background: var(--color-text);
+  color: var(--color-bg);
 }
