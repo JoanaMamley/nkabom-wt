@@ -1,0 +1,185 @@
+import {
+  assertFails,
+  assertSucceeds,
+  initializeTestEnvironment,
+  type RulesTestEnvironment,
+} from '@firebase/rules-unit-testing';
+import { readFileSync } from 'node:fs';
+import {
+  collection,
+  deleteDoc,
+  doc,
+  getDoc,
+  getDocs,
+  serverTimestamp,
+  setDoc,
+  Timestamp,
+  updateDoc,
+} from 'firebase/firestore';
+import { afterAll, beforeAll, beforeEach, describe, it } from 'vitest';
+
+import {
+  MAX_YEARS_TO_GRADUATION,
+  MEMBERS,
+  MIN_GRADUATION_YEAR,
+  STAGES,
+  USERS,
+} from '../functions/src/model';
+
+// Runs against the Firestore emulator: npm run test:rules starts it for the test run.
+let env: RulesTestEnvironment;
+
+beforeAll(async () => {
+  env = await initializeTestEnvironment({
+    projectId: 'demo-nkabom',
+    firestore: { rules: readFileSync('firestore.rules', 'utf8') },
+  });
+});
+
+afterAll(() => env.cleanup());
+
+// Every test starts from an empty database, so each one creates its collections from scratch.
+beforeEach(() => env.clearFirestore());
+
+function as(uid: string) {
+  return env.authenticatedContext(uid).firestore();
+}
+
+function newProfile(overrides: Record<string, unknown> = {}) {
+  return {
+    firstNames: 'Ama Serwaa',
+    surname: 'Mensah',
+    dateOfBirth: '1998-02-29',
+    stage: 'graduate',
+    courseOrOccupation: 'Civil engineer',
+    graduationYear: 2020,
+    photoPath: 'photos/ama/profile.webp',
+    status: 'pending',
+    createdAt: serverTimestamp(),
+    updatedAt: serverTimestamp(),
+    ...overrides,
+  };
+}
+
+async function seed(path: string, data: Record<string, unknown>) {
+  await env.withSecurityRulesDisabled((context) => setDoc(doc(context.firestore(), path), data));
+}
+
+describe('users', () => {
+  beforeEach(() =>
+    seed(`${USERS}/ama`, { role: 'member', email: 'ama@example.com', createdAt: Timestamp.now() }),
+  );
+
+  it('lets a user read their own record', async () => {
+    await assertSucceeds(getDoc(doc(as('ama'), USERS, 'ama')));
+  });
+
+  it("hides other users' records and the list", async () => {
+    await assertFails(getDoc(doc(as('kofi'), USERS, 'ama')));
+    await assertFails(getDocs(collection(as('ama'), USERS)));
+  });
+
+  it('is closed when logged out', async () => {
+    await assertFails(getDoc(doc(env.unauthenticatedContext().firestore(), USERS, 'ama')));
+  });
+
+  it('never lets a user write a record, so no one can choose their role', async () => {
+    await assertFails(updateDoc(doc(as('ama'), USERS, 'ama'), { role: 'primaryAdmin' }));
+    await assertFails(setDoc(doc(as('kofi'), USERS, 'kofi'), { role: 'member', email: null }));
+    await assertFails(deleteDoc(doc(as('ama'), USERS, 'ama')));
+  });
+});
+
+describe('members', () => {
+  it('lets a user create their own pending profile and read it back', async () => {
+    const profile = doc(as('ama'), MEMBERS, 'ama');
+
+    await assertSucceeds(setDoc(profile, newProfile()));
+    await assertSucceeds(getDoc(profile));
+  });
+
+  it('accepts both stages', async () => {
+    for (const [i, stage] of STAGES.entries()) {
+      await assertSucceeds(setDoc(doc(as(`user${i}`), MEMBERS, `user${i}`), newProfile({ stage })));
+    }
+  });
+
+  it('allows only one profile per user', async () => {
+    const profile = doc(as('ama'), MEMBERS, 'ama');
+    await setDoc(profile, newProfile());
+
+    await assertFails(setDoc(profile, newProfile({ surname: 'Owusu' })));
+    await assertFails(updateDoc(profile, { surname: 'Owusu' }));
+    await assertFails(deleteDoc(profile));
+  });
+
+  it("refuses a profile under another user's ID", async () => {
+    await assertFails(setDoc(doc(as('kofi'), MEMBERS, 'ama'), newProfile()));
+  });
+
+  it('refuses a profile when logged out', async () => {
+    const db = env.unauthenticatedContext().firestore();
+    await assertFails(setDoc(doc(db, MEMBERS, 'ama'), newProfile()));
+  });
+
+  it("hides other members' profiles and the list", async () => {
+    await seed(`${MEMBERS}/ama`, { ...newProfile(), createdAt: Timestamp.now() });
+
+    await assertFails(getDoc(doc(as('kofi'), MEMBERS, 'ama')));
+    await assertFails(getDocs(collection(as('ama'), MEMBERS)));
+  });
+
+  it('refuses any status but pending, so members cannot approve themselves', async () => {
+    for (const status of ['active', 'rejected', 'deactivated']) {
+      await assertFails(setDoc(doc(as('ama'), MEMBERS, 'ama'), newProfile({ status })));
+    }
+  });
+
+  it('refuses missing and extra fields', async () => {
+    const withoutPhoto: Record<string, unknown> = newProfile();
+    delete withoutPhoto['photoPath'];
+
+    await assertFails(setDoc(doc(as('ama'), MEMBERS, 'ama'), withoutPhoto));
+    await assertFails(setDoc(doc(as('ama'), MEMBERS, 'ama'), newProfile({ role: 'admin' })));
+  });
+
+  it.each([
+    ['a blank first name', { firstNames: '  ' }],
+    ['a surname over 100 characters', { surname: 'a'.repeat(101) }],
+    ['a date of birth in another format', { dateOfBirth: '29/02/1998' }],
+    ['month 13', { dateOfBirth: '1998-13-01' }],
+    ['day 32', { dateOfBirth: '1998-01-32' }],
+    ['an unknown stage', { stage: 'retired' }],
+    ['a blank course or occupation', { courseOrOccupation: '' }],
+    ['a graduation year before the range', { graduationYear: MIN_GRADUATION_YEAR - 1 }],
+    [
+      'a graduation year after the range',
+      { graduationYear: new Date().getFullYear() + MAX_YEARS_TO_GRADUATION + 1 },
+    ],
+    ['a fractional graduation year', { graduationYear: 2020.5 }],
+    ['a graduation year as text', { graduationYear: '2020' }],
+    ['a blank photo path', { photoPath: '' }],
+    ['a creation time set by the client', { createdAt: Timestamp.fromDate(new Date(2020, 0, 1)) }],
+    ['an update time set by the client', { updatedAt: Timestamp.fromDate(new Date(2020, 0, 1)) }],
+  ])('refuses %s', async (_case, overrides) => {
+    await assertFails(setDoc(doc(as('ama'), MEMBERS, 'ama'), newProfile(overrides)));
+  });
+
+  it('accepts the ends of the graduation year range', async () => {
+    const last = new Date().getFullYear() + MAX_YEARS_TO_GRADUATION;
+
+    await assertSucceeds(
+      setDoc(doc(as('ama'), MEMBERS, 'ama'), newProfile({ graduationYear: MIN_GRADUATION_YEAR })),
+    );
+    await assertSucceeds(
+      setDoc(doc(as('kofi'), MEMBERS, 'kofi'), newProfile({ graduationYear: last })),
+    );
+  });
+});
+
+describe('everything else', () => {
+  it('is closed by default', async () => {
+    await assertFails(setDoc(doc(as('ama'), 'anything', 'ama'), { a: 1 }));
+    await assertFails(getDoc(doc(as('ama'), 'anything', 'ama')));
+  });
+});
