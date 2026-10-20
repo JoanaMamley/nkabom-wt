@@ -1,12 +1,14 @@
 import type { CallableRequest } from 'firebase-functions/v2/https';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
-import { getPhotoDownloadUrl, getPhotoUploadUrl } from './photos';
+import { getPhotoDownloadUrl, getPhotoUploadUrl, parseR2Credentials } from './photos';
 
 const env = {
-  R2_ACCOUNT_ID: 'acct123',
-  R2_ACCESS_KEY_ID: 'key-id',
-  R2_SECRET_ACCESS_KEY: 'secret',
+  R2_CREDENTIALS: JSON.stringify({
+    accountId: 'acct123',
+    accessKeyId: 'key-id',
+    secretAccessKey: 'secret',
+  }),
   R2_BUCKET: 'nkabom-photos',
   R2_ENDPOINT: '',
 };
@@ -74,7 +76,7 @@ describe('getPhotoUploadUrl', () => {
   });
 
   it('says so when R2 is not configured', async () => {
-    delete process.env['R2_SECRET_ACCESS_KEY'];
+    delete process.env['R2_CREDENTIALS'];
 
     await expect(
       call(getPhotoUploadUrl, { contentType: 'image/webp', size: 1 }),
@@ -112,5 +114,28 @@ describe('getPhotoDownloadUrl', () => {
     await expect(call(getPhotoDownloadUrl, { path })).rejects.toMatchObject({
       code: 'invalid-argument',
     });
+  });
+});
+
+describe('parseR2Credentials', () => {
+  const keys = { accountId: 'acct123', accessKeyId: 'key-id', secretAccessKey: 'secret' };
+
+  it('reads the three keys from the JSON secret', () => {
+    expect(parseR2Credentials(JSON.stringify(keys))).toEqual(keys);
+  });
+
+  it('ignores extra fields', () => {
+    expect(parseR2Credentials(JSON.stringify({ ...keys, note: 'staging' }))).toEqual(keys);
+  });
+
+  it.each([
+    ['an empty secret', ''],
+    ['text that is not JSON', 'acct123'],
+    ['JSON null', 'null'],
+    ['a missing key', JSON.stringify({ accountId: 'acct123', accessKeyId: 'key-id' })],
+    ['an empty key', JSON.stringify({ ...keys, secretAccessKey: '' })],
+    ['a key that is not text', JSON.stringify({ ...keys, accountId: 123 })],
+  ])('treats %s as not configured', (_case, value) => {
+    expect(parseR2Credentials(value)).toBeNull();
   });
 });

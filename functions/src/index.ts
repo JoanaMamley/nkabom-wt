@@ -1,3 +1,6 @@
+// First, so the global options apply to every function below.
+import './global-options';
+
 import { initializeApp } from 'firebase-admin/app';
 import { onRequest } from 'firebase-functions/v2/https';
 
@@ -5,6 +8,7 @@ initializeApp();
 
 export { backupFirestore } from './backups';
 export { schedulerHeartbeat } from './scheduled';
+export { enforceBudget } from './costs';
 export { syncDirectoryEntry } from './directory';
 export { getPhotoDownloadUrl, getPhotoUploadUrl } from './photos';
 export { createUserRecord } from './users';

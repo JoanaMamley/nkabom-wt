@@ -81,7 +81,7 @@ npm run lint && npm run format:check && npm run check:contrast && npm test -- --
 - `src/environments/environment.ts` and `environment.staging.ts` hold the production and staging Firebase web config. The web config identifies the project and is not a secret.
 - Server-side secrets (Cloudflare R2, email provider, Google service account) never go in this repo. `.env*`, `.secret.local`, key files and service account JSON are git-ignored.
 - `functions/.env.<project ID>` holds the non-secret Functions settings for that project: `demo-nkabom` for the emulators, `nkabom-staging` and `nkabom-prod` for the real projects. They are the only committed `.env` files; never put secrets in them.
-- Secrets are set per project with `firebase functions:secrets:set NAME --project staging` (or `production`) and kept in Google Cloud Secret Manager. A function only sees the secrets it lists in its options.
+- Secrets are set per project with `firebase functions:secrets:set NAME --project staging` (or `production`) and kept in Google Cloud Secret Manager. A function only sees the secrets it lists in its options. Secret Manager is free for 6 secret versions per billing account, counting both projects, so keep each project to 3 secrets (`R2_CREDENTIALS`, `BREVO_API_KEY`, and the calendar key from NKB-501). Setting a secret again adds a version; after a deploy, `firebase functions:secrets:prune` destroys the versions no longer used.
 
 ## Environments and deploys
 
@@ -102,12 +102,13 @@ Firebase Hosting serves only HTTPS (FR-8.2): it redirects plain HTTP and sends a
 Once for each of `nkabom-staging` and `nkabom-prod`, signed in as the shared project account:
 
 1. In the [Firebase console](https://console.firebase.google.com), create the project with exactly that ID. If the ID is taken, choose another and change it in `.firebaserc`, the `functions/.env.<project ID>` file name, its `BACKUP_BUCKET`, and `.gitignore`.
-2. Upgrade to the Blaze plan and set a budget alert under **Usage and billing**.
+2. Upgrade to the Blaze plan under **Usage and billing**.
 3. **Firestore Database > Create database** in production mode. The location cannot be changed later; use the same one for both projects and for the backup bucket.
 4. **Project settings > Your apps**: add a web app, then copy its config into `src/environments/environment.staging.ts` (staging) or `environment.ts` (production).
 5. Set the secrets for photos and email (see [Setting up a bucket](#setting-up-a-bucket) and [Setting up Brevo](#setting-up-brevo)), adding `--project staging` or `--project production`.
 6. Create the backup bucket (see [Backups](#backups)).
 7. Run `npm run deploy:staging` (or `deploy:production`). The first deploy asks for any setting missing from the `.env` file, such as `EMAIL_FROM`, and saves the answer there; commit it.
+8. Set the budget and its cap: `scripts/create-budget.sh nkabom-staging 0.50` or `scripts/create-budget.sh nkabom-prod 1.50` (see [Costs](#costs)).
 
 ## Installable app (PWA)
 
@@ -172,17 +173,16 @@ Once per Firebase project (staging and production), in the executives' Cloudflar
    ```
 
 3. **R2 > Manage API tokens > Create API token** with **Object Read & Write**, limited to this bucket. Note the access key ID and secret access key; the secret is shown once.
-4. Store the values in the Firebase project (the account ID is on the R2 overview page):
+4. Store the three values as one secret, `R2_CREDENTIALS`, in JSON (the account ID is on the R2 overview page):
 
    ```sh
-   firebase functions:secrets:set R2_ACCOUNT_ID
-   firebase functions:secrets:set R2_ACCESS_KEY_ID
-   firebase functions:secrets:set R2_SECRET_ACCESS_KEY
+   printf '%s' '{"accountId":"…","accessKeyId":"…","secretAccessKey":"…"}' \
+     | firebase functions:secrets:set R2_CREDENTIALS --data-file=- --project staging
    ```
 
-   The first deploy asks for `R2_BUCKET` (default `nkabom-photos`).
+   One secret instead of three keeps Secret Manager free (see [Configuration and secrets](#configuration-and-secrets)). The first deploy asks for `R2_BUCKET` (default `nkabom-photos`).
 
-To use a real bucket from the emulators, put the three values in `functions/.secret.local` (git-ignored) as `NAME=value` lines.
+To use a real bucket from the emulators, put the same JSON in `functions/.secret.local` (git-ignored), in single quotes: `R2_CREDENTIALS='{"accountId":"…",…}'`.
 
 ## Email
 
@@ -238,11 +238,16 @@ Then export it from [functions/src/index.ts](functions/src/index.ts). Every job:
 
 The emulator does not run scheduled jobs. Test the handler with `job.run(...)`, as in [scheduled.spec.ts](functions/src/scheduled.spec.ts).
 
-Cloud Scheduler gives 3 free jobs per billing account, then charges $0.10 a month for each job, counting every job in every project.
+Cloud Scheduler gives 3 free jobs per billing account, then charges $0.10 a month for each job, counting every job in every project. So that it stays free:
+
+- **One daily job per project for periodic tasks.** Reminders, clean-ups and other once-a-day work (NKB-308, NKB-512, NKB-707) run as tasks inside a single daily job, not as jobs of their own. The first story that needs one creates it with `scheduledJob` and moves the Firestore backup into it as a task; later stories add their task to it. Each task must be safe to run again, since a retry reruns them all, and one failing task must not stop the others from running.
+- **Its own job only when daily is not enough,** such as a check every few minutes. Note the extra cost in [docs/handbook/costs.md](docs/handbook/costs.md).
+
+Until the daily job exists, the backup is its own job. After that, each project has just the daily job: 2 jobs in total, within the free 3.
 
 ### Heartbeat
 
-`schedulerHeartbeat` runs every day at 06:00 and does nothing but succeed. If a day has no `Scheduled job finished` for it, scheduled jobs are not running in that project.
+`schedulerHeartbeat` runs every day at 06:00 and does nothing but succeed. It is temporary: it exists to check scheduled jobs on staging once (NKB-113), and is then removed so it does not take up a free Cloud Scheduler job.
 
 To check retries and error logs on staging:
 
@@ -250,6 +255,17 @@ To check retries and error logs on staging:
 2. Set `HEARTBEAT_FAIL=true` in `functions/.env.nkabom-staging` and run `npx firebase deploy --only functions:schedulerHeartbeat --project staging`.
 3. Force run it again. Logs Explorer shows `Scheduled job failed` four times (the run and its 3 retries) over about 7 minutes.
 4. Set `HEARTBEAT_FAIL=false` and deploy again. Do not commit it set to true.
+5. Remove the heartbeat: delete `schedulerHeartbeat` and its `HEARTBEAT_FAIL` setting from `scheduled.ts`, `index.ts`, the tests, `functions/.env.nkabom-staging` and `functions/.env.demo-nkabom`, and remove this section. The next deploy to each project asks to delete the function; say yes.
+
+## Costs
+
+The app should cost under $5 a month. The guardrails (NKB-112):
+
+- **Budgets:** $1.50 a month for production and $0.50 for staging, made by [scripts/create-budget.sh](scripts/create-budget.sh). Alert emails go to the shared project account at 50%, 90% and 100%, and when the month is forecast to pass the budget.
+- **Cap:** `enforceBudget` in [functions/src/costs.ts](functions/src/costs.ts) receives each project's budget notifications on the `budget-alerts` topic, and turns off that project's billing once actual spend reaches its budget. Functions then stop until billing is turned back on by hand.
+- **Instance limit:** [functions/src/global-options.ts](functions/src/global-options.ts) caps every function at 10 instances. `index.ts` imports it first, and a test checks every exported function has the cap.
+
+What to check each month, and what to do when an alert arrives, is in the handbook: [docs/handbook/costs.md](docs/handbook/costs.md).
 
 ## Backups
 
