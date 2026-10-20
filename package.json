@@ -14,7 +14,8 @@
     "format:check": "prettier --check . && npm --prefix functions run format:check",
     "postinstall": "npm --prefix functions install",
     "build:functions": "npm --prefix functions run build",
-    "test:functions": "npm --prefix functions test"
+    "test:functions": "npm --prefix functions test",
+    "test:rules": "firebase emulators:exec --only firestore \"vitest run --config vitest.rules.config.ts\""
   },
   "prettier": {
     "printWidth": 100,
@@ -46,6 +47,7 @@
     "@angular/cli": "^21.1.2",
     "@angular/compiler-cli": "^21.1.0",
     "@eslint/js": "^10.0.1",
+    "@firebase/rules-unit-testing": "^6.0.0",
     "angular-eslint": "21.4.0",
     "concurrently": "^10.0.6",
     "eslint": "^10.3.0",

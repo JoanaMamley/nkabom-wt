@@ -55,13 +55,36 @@ jobs:
       - run: npm test
       - run: npm run build
 
+  rules:
+    name: Firestore rules
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+          cache: npm
+      # The Firestore emulator runs on Java.
+      - uses: actions/setup-java@v6
+        with:
+          distribution: temurin
+          java-version: 21
+      - run: npm ci
+      - run: npm run test:rules
+
   # The one check to require on pull requests. It runs even when a job above fails, because a
   # skipped required check counts as passing. New jobs only need adding to `needs` and the test.
   ci:
     name: CI
     if: always()
-    needs: [frontend, backend]
+    needs: [frontend, backend, rules]
     runs-on: ubuntu-latest
     steps:
       - name: Require every job to pass
-        run: '[ "${{ needs.frontend.result }}" = success ] && [ "${{ needs.backend.result }}" = success ]'
+        run: >-
+          [ "${{ needs.frontend.result }}" = success ]
+          && [ "${{ needs.backend.result }}" = success ]
+          && [ "${{ needs.rules.result }}" = success ]

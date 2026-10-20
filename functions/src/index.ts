@@ -3,6 +3,8 @@ import { onRequest } from 'firebase-functions/v2/https';
 
 initializeApp();
 
+export { createUserRecord } from './users';
+
 // Placeholder so the Functions emulator has something to load.
 // Replaced by real functions starting with NKB-104 (audit log) and NKB-208 (roles).
 export const ping = onRequest((_request, response) => {
