@@ -4,7 +4,7 @@ Angular PWA and Firebase backend (Cloud Functions, Firestore rules) for Nkabom, 
 
 ## Prerequisites
 
-- Node.js 22.12+ (or 24.x)
+- Node.js 24.x. CI uses it, and the Firebase SDK 13 packages declare Node 24.12+. Node 22.12+ also works for the app.
 - Java 11+ (needed by the Firestore emulator)
 
 ## Getting started

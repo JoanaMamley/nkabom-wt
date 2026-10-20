@@ -23,7 +23,8 @@ jobs:
           persist-credentials: false
       - uses: actions/setup-node@v7
         with:
-          node-version: 22
+          # Node 24 matches local development, and the Firebase SDK 13 packages require 24.12+.
+          node-version: 24
           cache: npm
       - run: npm ci
       - run: npx ng lint
@@ -44,6 +45,7 @@ jobs:
           persist-credentials: false
       - uses: actions/setup-node@v7
         with:
+          # Matches the Cloud Functions runtime (engines in functions/package.json).
           node-version: 22
           cache: npm
           cache-dependency-path: functions/package-lock.json
