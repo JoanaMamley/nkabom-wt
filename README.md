@@ -216,9 +216,44 @@ Brevo's free plan sends up to 300 emails a day. Once per Firebase project (stagi
 3. **SMTP & API > API keys**: create a key, then run `firebase functions:secrets:set BREVO_API_KEY`.
 4. The first deploy asks for `EMAIL_FROM`, an address on that domain.
 
+## Scheduled jobs
+
+Reminders, calendar sync and backups run as scheduled Cloud Functions. Make each one with `scheduledJob` from [functions/src/scheduled.ts](functions/src/scheduled.ts) rather than `onSchedule`:
+
+```ts
+export const sendReminders = scheduledJob(
+  'sendReminders',
+  { schedule: 'every day 08:00' },
+  async () => {
+    // ...
+  },
+);
+```
+
+Then export it from [functions/src/index.ts](functions/src/index.ts). Every job:
+
+- **Runs on Accra time.** A schedule like `every day 08:00` (or cron syntax, `0 8 * * *`) means 08:00 in Ghana.
+- **Is retried when it fails.** Cloud Scheduler tries a failed run again 3 times, after 1, 2 and 4 minutes. A job can pass its own `retryCount` and backoff settings. A retry repeats the whole run, so write jobs to skip work that is already done, for example by recording what was sent.
+- **Logs each run** to Cloud Logging, with the job name, the scheduled time and how long it took: `Scheduled job finished`, or `Scheduled job failed` with the error and stack. To find failures, search Logs Explorer for `jsonPayload.message="Scheduled job failed"`.
+
+The emulator does not run scheduled jobs. Test the handler with `job.run(...)`, as in [scheduled.spec.ts](functions/src/scheduled.spec.ts).
+
+Cloud Scheduler gives 3 free jobs per billing account, then charges $0.10 a month for each job, counting every job in every project.
+
+### Heartbeat
+
+`schedulerHeartbeat` runs every day at 06:00 and does nothing but succeed. If a day has no `Scheduled job finished` for it, scheduled jobs are not running in that project.
+
+To check retries and error logs on staging:
+
+1. In Cloud Scheduler, **Force run** `firebase-schedule-schedulerHeartbeat-us-central1`. Logs Explorer shows `Scheduled job finished`.
+2. Set `HEARTBEAT_FAIL=true` in `functions/.env.nkabom-staging` and run `npx firebase deploy --only functions:schedulerHeartbeat --project staging`.
+3. Force run it again. Logs Explorer shows `Scheduled job failed` four times (the run and its 3 retries) over about 7 minutes.
+4. Set `HEARTBEAT_FAIL=false` and deploy again. Do not commit it set to true.
+
 ## Backups
 
-`backupFirestore` in [functions/src/backups.ts](functions/src/backups.ts) exports the whole Firestore database every day at 02:00 Accra time (FR-8.6), to `BACKUP_BUCKET/firestore/<UTC time>`, for example `gs://nkabom-prod-backups/firestore/2026-10-20T02-00-00Z`. A failed export is retried twice and logged in Cloud Logging. The bucket deletes exports after 30 days.
+`backupFirestore` in [functions/src/backups.ts](functions/src/backups.ts) exports the whole Firestore database every day at 02:00 Accra time (FR-8.6), to `BACKUP_BUCKET/firestore/<UTC time>`, for example `gs://nkabom-prod-backups/firestore/2026-10-20T02-00-00Z`. It is a [scheduled job](#scheduled-jobs), so a failed export is retried and logged. The bucket deletes exports after 30 days.
 
 Exports hold Firestore only. Photos are in R2 and Auth accounts in Firebase Auth, neither of which this covers.
 

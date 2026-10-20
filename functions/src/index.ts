@@ -4,6 +4,7 @@ import { onRequest } from 'firebase-functions/v2/https';
 initializeApp();
 
 export { backupFirestore } from './backups';
+export { schedulerHeartbeat } from './scheduled';
 export { getPhotoDownloadUrl, getPhotoUploadUrl } from './photos';
 export { createUserRecord } from './users';
 

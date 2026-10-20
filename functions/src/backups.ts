@@ -1,7 +1,8 @@
 import { v1 } from '@google-cloud/firestore';
 import { logger } from 'firebase-functions';
 import { defineString, projectID } from 'firebase-functions/params';
-import { onSchedule } from 'firebase-functions/v2/scheduler';
+
+import { scheduledJob } from './scheduled';
 
 // Each project's own bucket, set in functions/.env.<project ID>, for example gs://nkabom-prod-backups.
 // The bucket's lifecycle rule deletes old exports (see the README).
@@ -46,8 +47,9 @@ export async function exportFirestore(
 }
 
 /** Daily Firestore backup (FR-8.6). Restoring is a manual step, described in the README. */
-export const backupFirestore = onSchedule(
-  { schedule: 'every day 02:00', timeZone: 'Africa/Accra', retryCount: 2 },
+export const backupFirestore = scheduledJob(
+  'backupFirestore',
+  { schedule: 'every day 02:00' },
   async () => {
     await exportFirestore(new v1.FirestoreAdminClient(), projectID.value(), backupBucket.value());
   },
