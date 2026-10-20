@@ -1,5 +1,11 @@
 import { describe, expect, it, vi } from 'vitest';
 
+// v1 functions need a project to describe themselves.
+vi.hoisted(() => {
+  process.env.GCLOUD_PROJECT = 'demo-nkabom';
+});
+
+import * as functions from './index';
 import { ping } from './index';
 
 describe('ping', () => {
@@ -10,5 +16,11 @@ describe('ping', () => {
     await ping(request, response);
 
     expect(json).toHaveBeenCalledWith({ ok: true });
+  });
+});
+
+describe('every function', () => {
+  it.each(Object.entries(functions))('%s is capped at 10 instances', (_name, fn) => {
+    expect((fn as { __endpoint: { maxInstances?: number } }).__endpoint.maxInstances).toBe(10);
   });
 });
