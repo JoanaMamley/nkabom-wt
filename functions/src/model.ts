@@ -21,6 +21,15 @@ export type Stage = (typeof STAGES)[number];
 export const MIN_GRADUATION_YEAR = 1990;
 export const MAX_YEARS_TO_GRADUATION = 8;
 
+// FR-2.3: accepted photo types with the file extension each is stored under, and the size limit.
+export const PHOTO_TYPES = {
+  'image/jpeg': 'jpg',
+  'image/png': 'png',
+  'image/webp': 'webp',
+} as const;
+export type PhotoType = keyof typeof PHOTO_TYPES;
+export const MAX_PHOTO_BYTES = 5 * 1024 * 1024;
+
 /** users/{uid}: one per Firebase Auth account. Only Cloud Functions write it. */
 export interface UserRecord {
   role: Role;
@@ -41,7 +50,7 @@ export interface MemberProfile {
   /** Course of study for a student, occupation for a graduate. */
   courseOrOccupation: string;
   graduationYear: number;
-  /** Object key in the private R2 bucket (NKB-105), never a URL. */
+  /** Object key in the private R2 bucket, photos/{uid}/{uuid}.{ext} (NKB-105). Never a URL. */
   photoPath: string;
   status: MemberStatus;
   /** Registration date (FR-3.2). */

@@ -3,6 +3,7 @@ import { onRequest } from 'firebase-functions/v2/https';
 
 initializeApp();
 
+export { getPhotoDownloadUrl, getPhotoUploadUrl } from './photos';
 export { createUserRecord } from './users';
 
 // Placeholder so the Functions emulator has something to load.

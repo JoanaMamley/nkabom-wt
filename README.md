@@ -73,7 +73,52 @@ npm run lint && npm run format:check && npm test -- --watch=false && npm run bui
 
 - `src/environments/environment.development.ts` points the app at the emulators.
 - `src/environments/environment.ts` holds the production Firebase web config (filled in by NKB-109). The web config identifies the project and is not a secret.
-- Server-side secrets (Cloudflare R2, email provider, Google service account) never go in this repo. `.env*`, key files and service account JSON are git-ignored.
+- Server-side secrets (Cloudflare R2, email provider, Google service account) never go in this repo. `.env*`, `.secret.local`, key files and service account JSON are git-ignored.
+- `functions/.env.demo-nkabom` holds the non-secret Functions settings for the emulators, so they start without prompting. It is the one committed `.env` file; never put secrets in it.
+
+## Photo storage (Cloudflare R2)
+
+Photos live in a private R2 bucket. The browser never gets the bucket's keys: it calls a Cloud Function for a short-lived signed link and uploads or downloads with that.
+
+| Function              | Takes                   | Returns                                                      |
+| --------------------- | ----------------------- | ------------------------------------------------------------ |
+| `getPhotoUploadUrl`   | `{ contentType, size }` | `{ url, path, expiresIn }`: a 5-minute PUT link and the path |
+| `getPhotoDownloadUrl` | `{ path }`              | `{ url, expiresIn }`: a 10-minute GET link                   |
+
+The upload link accepts only a file of the declared type (JPG, PNG or WebP) and exact size (up to 5 MB): PUT it with that `Content-Type`. Save the returned `path` as the profile's `photoPath`; the Firestore rules accept only a path in the member's own `photos/{uid}/` folder. For now members can download only their own photo.
+
+Without R2 settings the emulators still run, and both functions answer `failed-precondition` ("Photo storage is not configured").
+
+### Setting up a bucket
+
+Once per Firebase project (staging and production), in the executives' Cloudflare account:
+
+1. **R2 > Create bucket**, for example `nkabom-photos`. Leave public access off (no r2.dev URL, no custom domain), so files open only through signed links.
+2. In the bucket's **Settings > CORS policy**, allow the app to upload and download:
+
+   ```json
+   [
+     {
+       "AllowedOrigins": ["http://localhost:4200", "https://<app domain>"],
+       "AllowedMethods": ["GET", "PUT"],
+       "AllowedHeaders": ["Content-Type"],
+       "MaxAgeSeconds": 3600
+     }
+   ]
+   ```
+
+3. **R2 > Manage API tokens > Create API token** with **Object Read & Write**, limited to this bucket. Note the access key ID and secret access key; the secret is shown once.
+4. Store the values in the Firebase project (the account ID is on the R2 overview page):
+
+   ```sh
+   firebase functions:secrets:set R2_ACCOUNT_ID
+   firebase functions:secrets:set R2_ACCESS_KEY_ID
+   firebase functions:secrets:set R2_SECRET_ACCESS_KEY
+   ```
+
+   The first deploy asks for `R2_BUCKET` (default `nkabom-photos`).
+
+To use a real bucket from the emulators, put the three values in `functions/.secret.local` (git-ignored) as `NAME=value` lines.
 
 ## Data model
 

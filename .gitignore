@@ -54,6 +54,8 @@ firebase-debug.*.log
 .env
 .env.*
 !.env.example
+!functions/.env.demo-nkabom
+.secret.local
 *.pem
 *.key
 service-account*.json

@@ -46,7 +46,11 @@ function as(uid: string) {
   return env.authenticatedContext(uid).firestore();
 }
 
-function newProfile(overrides: Record<string, unknown> = {}) {
+function photoOf(uid: string) {
+  return `photos/${uid}/0f8fad5b-d9cb-469f-a165-70867728950e.webp`;
+}
+
+function newProfile(overrides: Record<string, unknown> = {}, uid = 'ama') {
   return {
     firstNames: 'Ama Serwaa',
     surname: 'Mensah',
@@ -54,7 +58,7 @@ function newProfile(overrides: Record<string, unknown> = {}) {
     stage: 'graduate',
     courseOrOccupation: 'Civil engineer',
     graduationYear: 2020,
-    photoPath: 'photos/ama/profile.webp',
+    photoPath: photoOf(uid),
     status: 'pending',
     createdAt: serverTimestamp(),
     updatedAt: serverTimestamp(),
@@ -101,7 +105,9 @@ describe('members', () => {
 
   it('accepts both stages', async () => {
     for (const [i, stage] of STAGES.entries()) {
-      await assertSucceeds(setDoc(doc(as(`user${i}`), MEMBERS, `user${i}`), newProfile({ stage })));
+      await assertSucceeds(
+        setDoc(doc(as(`user${i}`), MEMBERS, `user${i}`), newProfile({ stage }, `user${i}`)),
+      );
     }
   });
 
@@ -160,10 +166,23 @@ describe('members', () => {
     ['a fractional graduation year', { graduationYear: 2020.5 }],
     ['a graduation year as text', { graduationYear: '2020' }],
     ['a blank photo path', { photoPath: '' }],
+    ["another member's photo", { photoPath: photoOf('kofi') }],
+    ['a photo name not issued by the upload function', { photoPath: 'photos/ama/profile.webp' }],
+    ['a photo path with a prefix', { photoPath: `x/${photoOf('ama')}` }],
+    ['a photo of another type', { photoPath: photoOf('ama').replace('.webp', '.svg') }],
+    ['a photo URL', { photoPath: `https://example.com/${photoOf('ama')}` }],
     ['a creation time set by the client', { createdAt: Timestamp.fromDate(new Date(2020, 0, 1)) }],
     ['an update time set by the client', { updatedAt: Timestamp.fromDate(new Date(2020, 0, 1)) }],
   ])('refuses %s', async (_case, overrides) => {
     await assertFails(setDoc(doc(as('ama'), MEMBERS, 'ama'), newProfile(overrides)));
+  });
+
+  it('accepts each photo type', async () => {
+    for (const [i, ext] of ['jpg', 'png', 'webp'].entries()) {
+      const uid = `user${i}`;
+      const photoPath = photoOf(uid).replace('.webp', `.${ext}`);
+      await assertSucceeds(setDoc(doc(as(uid), MEMBERS, uid), newProfile({ photoPath }, uid)));
+    }
   });
 
   it('accepts the ends of the graduation year range', async () => {
@@ -173,7 +192,7 @@ describe('members', () => {
       setDoc(doc(as('ama'), MEMBERS, 'ama'), newProfile({ graduationYear: MIN_GRADUATION_YEAR })),
     );
     await assertSucceeds(
-      setDoc(doc(as('kofi'), MEMBERS, 'kofi'), newProfile({ graduationYear: last })),
+      setDoc(doc(as('kofi'), MEMBERS, 'kofi'), newProfile({ graduationYear: last }, 'kofi')),
     );
   });
 });
