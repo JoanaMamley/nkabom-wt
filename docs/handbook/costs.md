@@ -14,6 +14,7 @@ Everything here is done signed in as the shared project Google account.
 - **Alert emails** go to the billing account's admins, which is the shared project account. The forecast email means Google expects the month to end over budget; it is a warning only.
 - **The cap:** each budget also notifies the project's `enforceBudget` function. Once actual spend for the month reaches the budget, it unlinks the project from the billing account, so no more charges can build up. It never acts on a forecast. Each project can only turn off its own billing, so staging cannot take production down.
 - **Instance limit:** no Cloud Function runs more than 10 copies at once, so a bug or a flood of requests cannot multiply the bill.
+- **Card limit:** Google and Cloudflare are paid with a virtual card with a monthly spending limit (see [accounts.md](accounts.md#payment-card)). It also covers Cloudflare and any other Google project on the account, which the budgets do not.
 
 Budgets are made with `scripts/create-budget.sh` (see the README, Setting up a project). Change an amount in the Google Cloud console under **Billing > Budgets & alerts**.
 
