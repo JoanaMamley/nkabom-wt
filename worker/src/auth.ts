@@ -19,11 +19,13 @@ const GOOGLE_KEYS = createRemoteJWKSet(
 
 export interface User {
   uid: string;
+  /** The account's display name, if it has one. */
+  name: string | null;
   email: string | null;
   emailVerified: boolean;
 }
 
-// Every endpoint except the health check calls this first (FR-1.11).
+// Checks the Firebase ID token. Endpoints call it through requireAccount (users.ts).
 export async function requireUser(
   request: Request,
   env: Env,
@@ -64,6 +66,7 @@ export async function verifyIdToken(
   }
   return {
     uid: payload.sub as string,
+    name: typeof payload['name'] === 'string' ? payload['name'] : null,
     email: typeof payload['email'] === 'string' ? payload['email'] : null,
     emailVerified: payload['email_verified'] === true,
   };

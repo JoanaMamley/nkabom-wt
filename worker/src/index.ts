@@ -1,14 +1,14 @@
-import { requireUser, type User } from './auth';
 import { preflight, withCors } from './cors';
 import type { Env } from './env';
 import { sendEmail } from './email';
-import { getDocument } from './firestore';
 import { HttpError, json } from './http';
+import { editProfile, register } from './members';
 import { getPhotoDownloadUrl, getPhotoUploadUrl, servePhoto } from './photos';
 import { requireAdmin } from './roles';
+import { type Account, requireAccount } from './users';
 
 // The app's API (NKB-114). Writes with side effects go through here; the app reads Firestore
-// directly. Each endpoint except /health and the signed photo links starts with requireUser.
+// directly. Each endpoint except /health and the signed photo links starts with requireAccount.
 export default {
   async fetch(request, env): Promise<Response> {
     if (request.method === 'OPTIONS') {
@@ -44,29 +44,34 @@ async function route(request: Request, env: Env): Promise<Response> {
       allow(request, 'GET');
       return json({ ok: true });
     case '/v1/me': {
-      // Test endpoint: checks the sign-in and reads the caller's users record.
+      // The app calls this after every sign-in, which also creates a new account's users record.
       allow(request, 'GET');
-      const user = await requireUser(request, env);
-      const record = await getDocument(env, `users/${user.uid}`);
-      return json({ uid: user.uid, role: record?.['role'] ?? null });
+      const { uid, role } = await requireAccount(request, env);
+      return json({ uid, role });
     }
+    case '/v1/registration':
+      allow(request, 'POST');
+      return register(request, env, await requireAccount(request, env));
+    case '/v1/profile':
+      allow(request, 'PATCH');
+      return editProfile(request, env, await requireAccount(request, env));
     case '/v1/photos/upload-url':
       allow(request, 'POST');
-      return getPhotoUploadUrl(request, env, await requireUser(request, env));
+      return getPhotoUploadUrl(request, env, await requireAccount(request, env));
     case '/v1/photos/download-url':
       allow(request, 'POST');
-      return getPhotoDownloadUrl(request, env, await requireUser(request, env));
+      return getPhotoDownloadUrl(request, env, await requireAccount(request, env));
     case '/v1/email/test':
       allow(request, 'POST');
-      return sendTestEmail(env, await requireUser(request, env));
+      return sendTestEmail(env, await requireAccount(request, env));
     default:
       throw new HttpError(404, 'Not found');
   }
 }
 
 // FR-4.14: an admin sends themselves a test email, which also checks the email set-up.
-async function sendTestEmail(env: Env, user: User): Promise<Response> {
-  await requireAdmin(env, user);
+async function sendTestEmail(env: Env, user: Account): Promise<Response> {
+  requireAdmin(user);
   if (!user.email) {
     throw new HttpError(400, 'Your account has no email address');
   }

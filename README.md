@@ -134,20 +134,22 @@ The app's API is one Cloudflare Worker per environment, on the free plan at its 
 
 Writes with side effects (registration, profile edits, approvals, admin changes, mentorship, publishing, exports) go through it; the app reads Firestore directly. The code is in [worker/src/](worker/src/).
 
-Every endpoint except `/health` and the signed photo links starts by checking the caller's Firebase ID token with `requireUser` from [worker/src/auth.ts](worker/src/auth.ts), so admin routes are enforced on the server, not only hidden in the app (FR-1.11). The token must be signed by Google, issued for that environment's project, unexpired, and name a user; otherwise the answer is `401`. The Worker then reaches Firestore through its REST API, as the project's service account, which bypasses the Firestore rules the way the Admin SDK does. For now it only reads (`getDocument`); the stories that move writes to the Worker add writes and Firebase Auth calls the same way.
+Every endpoint except `/health` and the signed photo links starts with `requireAccount` from [worker/src/users.ts](worker/src/users.ts), so admin routes are enforced on the server, not only hidden in the app (FR-1.11). It checks the caller's Firebase ID token (`requireUser` in [worker/src/auth.ts](worker/src/auth.ts)): the token must be signed by Google, issued for that environment's project, unexpired, and name a user; otherwise the answer is `401`. It then reads the caller's `users/{uid}` record for their role, and on a new account's first call creates that record as `member` (FR-1.5), so the app calls `GET /v1/me` straight after sign-up and every sign-in. The Worker reaches Firestore through its REST API, as the project's service account, which bypasses the Firestore rules the way the Admin SDK does.
 
-| Endpoint      | Needs sign-in | Returns                                                                      |
-| ------------- | ------------- | ---------------------------------------------------------------------------- |
-| `GET /health` | No            | `{ ok: true }`                                                               |
-| `GET /v1/me`  | Yes           | `{ uid, role }`: the caller's role from `users/{uid}`, or `null` without one |
+| Endpoint                | Needs sign-in | Takes                      | Returns                                                      |
+| ----------------------- | ------------- | -------------------------- | ------------------------------------------------------------ |
+| `GET /health`           | No            |                            | `{ ok: true }`                                               |
+| `GET /v1/me`            | Yes           |                            | `{ uid, role }`, creating the `users` record on a first call |
+| `POST /v1/registration` | Yes           | Every profile detail       | `201` `{ status: "pending" }` (see [Profiles](#profiles))    |
+| `PATCH /v1/profile`     | Yes           | Any of the profile details | `204`                                                        |
 
-The photo endpoints are listed under [Photo storage](#photo-storage).
+The photo endpoints are listed under [Photo storage](#photo-storage), and the admin test email under [Email](#email).
 
-`/v1/me` is the test endpoint for this set-up. Send the token as `Authorization: Bearer <ID token>`. Errors come back as `{ error }` with the status; an unexpected failure is a `500` whose details go only to the Worker's log, as `Request failed`.
+Send the token as `Authorization: Bearer <ID token>`. Errors come back as `{ error }` with the status; an unexpected failure is a `500` whose details go only to the Worker's log, as `Request failed`.
 
-**CORS:** only the origins in `ALLOWED_ORIGINS` (the app's `web.app` and `firebaseapp.com` addresses, and `localhost:4200` locally) get CORS headers, for `GET`, `POST`, `PUT` and `DELETE` with `Authorization` and `Content-Type`. Add a custom domain there if the app later gets one.
+**CORS:** only the origins in `ALLOWED_ORIGINS` (the app's `web.app` and `firebaseapp.com` addresses, and `localhost:4200` locally) get CORS headers, for `GET`, `POST`, `PUT`, `PATCH` and `DELETE` with `Authorization` and `Content-Type`. Add a custom domain there if the app later gets one.
 
-**Adding an endpoint:** add a case to `route` in [worker/src/index.ts](worker/src/index.ts), call `requireUser` first, and throw `HttpError` for answers such as `400` or `403`. Firestore helpers are in [worker/src/firestore.ts](worker/src/firestore.ts).
+**Adding an endpoint:** add a case to `route` in [worker/src/index.ts](worker/src/index.ts), call `requireAccount` first (and `requireAdmin` from [worker/src/roles.ts](worker/src/roles.ts) for admin endpoints), and throw `HttpError` for answers such as `400` or `403`. Firestore helpers are in [worker/src/firestore.ts](worker/src/firestore.ts): `getDocument` for a single read, and `runTransaction` for any change, which reads with `tx.getAll`, adds writes with `tx.create`, `set`, `update` and `delete` (`SERVER_TIME` as a value stores the commit time), and commits them all or none. Firestore runs the function again if the transaction clashes with another, so keep side effects such as email outside it.
 
 ### Settings and secrets
 
@@ -177,9 +179,9 @@ TOKEN=$(curl -s 'http://127.0.0.1:9099/identitytoolkit.googleapis.com/v1/account
 curl -s http://127.0.0.1:8787/v1/me -H "Authorization: Bearer $TOKEN"
 ```
 
-The answer is `{"uid":"…","role":"member"}`: the Functions emulator's `createUserRecord` writes the `users` record for every new account (until NKB-117 moves that to the Worker). Without the header the answer is `401`.
+The answer is `{"uid":"…","role":"member"}`, and the first call creates the account's `users` record, which the Emulator UI then shows. Without the header the answer is `401`.
 
-Tests run inside the Workers runtime with `@cloudflare/vitest-plugin` (`npm run test:worker`). They stand in for Google's keys, token exchange and Firestore, so they need no network or emulators.
+Tests run inside the Workers runtime with `@cloudflare/vitest-plugin` (`npm run test:worker`). They stand in for Google's keys, token exchange and Firestore, so they need no network or emulators. Firestore is played by [worker/src/fake-firestore.ts](worker/src/fake-firestore.ts), which answers reads, transactions and commits the way the emulator does; use `mockEmulators()` from `test-helpers.ts` in a test that signs in.
 
 ### Setting up the Worker
 
@@ -233,8 +235,8 @@ Once, in `worker/`, signed in as the shared project accounts (see [docs/handbook
 
 3. `curl -s $API/v1/me` answers `401` `{"error":"Sign in required"}`.
 4. `curl -s $API/v1/me -H "Authorization: Bearer ${TOKEN%?}x"` (the token with its last character changed) answers `401` `{"error":"Invalid or expired sign-in"}`.
-5. `curl -s $API/v1/me -H "Authorization: Bearer $TOKEN"` answers `{"uid":"<User UID>","role":null}`: no `users` record yet, since nothing creates one on staging until NKB-117.
-6. In **Firestore Database**, add a document to `users` with the User UID as its ID and a string field `role` set to `member`. Call step 5 again: it answers `"role":"member"`, read from Firestore through the service account. Leave the user and document in place as data for the restore test (NKB-119).
+5. `curl -s $API/v1/me -H "Authorization: Bearer $TOKEN"` answers `{"uid":"<User UID>","role":"member"}`.
+6. In **Firestore Database**, the `users` collection now has a document with the User UID as its ID, `role` `member` and the test address, written by the Worker through the service account. Leave the user and document in place as data for the restore test (NKB-119).
 7. Open the staging app at `https://nkabom-staging.web.app` and check it loads.
 
 ## Installable app (PWA)
@@ -279,7 +281,7 @@ Photos live in the Worker's private `PHOTOS` Workers KV namespace, one per envir
 
 Both need a sign-in, like every endpoint. The links themselves do not: they point at the Worker's own address, `/photos/{uid}/{uuid}.{ext}`, and carry an HMAC-SHA256 signature over the method, path and expiry (and, for uploads, the type and size), keyed by the `PHOTO_LINK_KEY` secret. A link that is missing, changed, expired, or used for the other method is refused with `403`.
 
-The upload link accepts only a file of the declared type (JPG, PNG or WebP) and exact size (up to 5 MB): PUT it with that `Content-Type`, and the Worker answers `204`. Save the returned `path` as the profile's `photoPath`; the Firestore rules accept only a path in the member's own `photos/{uid}/` folder. For now members can download only their own photo; admins (NKB-208) and the directory (NKB-601) add their own checks in `getPhotoDownloadUrl`.
+The upload link accepts only a file of the declared type (JPG, PNG or WebP) and exact size (up to 5 MB): PUT it with that `Content-Type`, and the Worker answers `204`. Send the returned `path` as `photoPath` to `POST /v1/registration` or `PATCH /v1/profile`, which accept only a photo already uploaded to the member's own `photos/{uid}/` folder. For now members can download only their own photo; admins (NKB-208) and the directory (NKB-601) add their own checks in `getPhotoDownloadUrl`.
 
 Photos are resized in the browser to about 100 KB (NKB-302), so 1,000 members use about 100 MB of KV's free 1 GB. Each upload is one of KV's free 1,000 writes a day, a limit shared by both environments and the backups (NKB-119). KV is eventually consistent: a new photo can take up to a minute to appear outside the place it was uploaded from, so the app should show the file it just uploaded rather than download it again.
 
@@ -449,29 +451,48 @@ Test a restore on staging once a year and after any change to the backup set-up,
 
 ## Data model
 
-Types and collection names live in [functions/src/model.ts](functions/src/model.ts). [firestore.rules](firestore.rules) validates the same shapes, so change the two together.
+Types and collection names live in [worker/src/model.ts](worker/src/model.ts). Only the Worker writes these collections; [firestore.rules](firestore.rules) lets the app read what each person may see and denies every write from the app.
 
-| Collection        | Document ID | Holds                                                                                   | Written by                                    |
-| ----------------- | ----------- | --------------------------------------------------------------------------------------- | --------------------------------------------- |
-| `users/{uid}`     | Auth UID    | Role: `member`, `admin` or `primaryAdmin`                                               | Cloud Functions only                          |
-| `members/{uid}`   | Auth UID    | Profile, and status: `pending`, `active`, `rejected` or `deactivated`                   | The member creates it, as pending             |
-| `directory/{uid}` | Auth UID    | Limited profile of an active member: name, photo, course or occupation, graduation year | `syncDirectoryEntry` only                     |
-| `auditLog/{id}`   | Auto ID     | Admin actions: actor, action, target, time                                              | Cloud Functions only, never edited or deleted |
+| Collection        | Document ID | Holds                                                                                   | Written by                                                      |
+| ----------------- | ----------- | --------------------------------------------------------------------------------------- | --------------------------------------------------------------- |
+| `users/{uid}`     | Auth UID    | Role: `member`, `admin` or `primaryAdmin`                                               | The Worker, on the account's first call                         |
+| `members/{uid}`   | Auth UID    | Profile, and status: `pending`, `active`, `rejected` or `deactivated`                   | The Worker: registration, profile edits and status changes      |
+| `directory/{uid}` | Auth UID    | Limited profile of an active member: name, photo, course or occupation, graduation year | The Worker, in the same transaction as each `members` change    |
+| `auditLog/{id}`   | Auto ID     | Admin actions: actor, action, target, time                                              | The Worker, with the action it records; never edited or deleted |
+
+Using the user ID as the document ID means a user can have only one profile (FR-2.6). Anything the rules do not open is denied (FR-1.12). The rules tests in `tests/` start each case from an empty emulator database.
+
+### Profiles
+
+Members register and edit their details only through the Worker ([worker/src/members.ts](worker/src/members.ts)), which checks every field (FR-2.2), so the checks cannot be skipped by writing to Firestore directly:
+
+- **`POST /v1/registration`** takes `firstNames`, `surname`, `dateOfBirth` (`YYYY-MM-DD`), `stage` (`student` or `graduate`), `courseOrOccupation`, `graduationYear` and `photoPath`, all required. It creates `members/{uid}` as `pending` with server times for `createdAt` and `updatedAt`, and answers `409` if the member has already registered.
+- **`PATCH /v1/profile`** takes any of the same fields and changes only those, setting `updatedAt` (FR-2.4, FR-2.5). An empty body `{}` changes nothing but `updatedAt`, for a member confirming their details are still right. Pending and active members can edit; a rejected or deactivated member gets `403`, and a caller with no profile `404`.
+
+Both refuse any other field, such as `status` or `createdAt`, with `400`. Text is trimmed and must be 1 to 100 characters; the date of birth must be a real date in the past, from 1900; the graduation year a whole number from 1990 to the current year + 8; and the photo one uploaded to the member's own folder. A refused request answers `400` with an `error` saying what to fix.
 
 ### Full records and the directory
 
 A member's full record, with date of birth and status, stays in `members/{uid}`, which only that member can read (and admins, from NKB-208). Other members see only `directory/{uid}`, which holds the FR-5.2 fields and nothing else (FR-3.1).
 
-The `syncDirectoryEntry` function in [functions/src/directory.ts](functions/src/directory.ts) runs on every write to `members/{uid}`. It lists a member once their status is `active`, copies changes to the listed fields, and removes the entry when the member is no longer active or the profile is deleted. It reads the profile again in a transaction rather than trusting the event, so a late or repeated event cannot leave an old entry behind, and a failed sync is retried. Only active members can read the directory, so pending members see nothing (FR-2.9).
+`syncDirectory` in [worker/src/directory.ts](worker/src/directory.ts) runs in the same transaction as every change to a profile, so the two are saved together or not at all. It lists a member once their status is `active`, copies changes to the listed fields, and removes the entry when the member is no longer active or the profile is deleted. Only active members can read the directory, so pending members see nothing (FR-2.9).
+
+Code that changes a profile, such as approval (NKB-307) or deactivation, reads it with `readMember` and writes with `changeProfile` from `members.ts`, which updates the directory too:
+
+```ts
+await runTransaction(env, async (tx) => {
+  const { profile, listed } = await readMember(tx, uid);
+  changeProfile(tx, uid, profile!, listed, { status: 'active' });
+  recordAudit(tx, admin, 'registration.approve', { type: 'member', id: uid });
+});
+```
 
 To show another field to members, add it to `DIRECTORY_FIELDS` in `model.ts` and check FR-5.2 and the privacy notice first. Date of birth and contact details must never be added.
 
 ### Audit log
 
-To record an admin action from a Cloud Function, call `recordAudit` from [functions/src/audit.ts](functions/src/audit.ts):
+To record an admin action, call `recordAudit` from [worker/src/audit.ts](worker/src/audit.ts) in the transaction that makes the change, as above, so the action is never saved without its entry. It takes the admin's account from `requireAccount` and copies their name and email into the entry. For an action that changes nothing else, such as an export, use a transaction of its own:
 
 ```ts
-await recordAudit(request.auth, 'registration.approve', { type: 'member', id: uid });
+await runTransaction(env, async (tx) => recordAudit(tx, admin, 'members.export', null));
 ```
-
-Using the user ID as the document ID means a user can have only one profile: the rules deny a second write. The `createUserRecord` function writes a `member` record for every new account. Anything the rules do not open is denied (FR-1.12). The rules tests in `tests/` start each case from an empty emulator database.

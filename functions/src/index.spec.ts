@@ -1,10 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
 
-// v1 functions need a project to describe themselves.
-vi.hoisted(() => {
-  process.env.GCLOUD_PROJECT = 'demo-nkabom';
-});
-
 import * as functions from './index';
 import { ping } from './index';
 

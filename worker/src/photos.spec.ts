@@ -4,7 +4,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { Env } from './env';
 import worker from './index';
 import { signDownload, signUpload } from './photos';
-import { claims, emulatorEnv, unsignedToken } from './test-helpers';
+import { claims, emulatorEnv, mockEmulators, unsignedToken } from './test-helpers';
 
 const ORIGIN = 'https://api.test';
 const amaPhoto = 'photos/ama/0f8fad5b-d9cb-469f-a165-70867728950e.webp';
@@ -14,11 +14,8 @@ const { PHOTOS } = bindings as unknown as Env;
 const env = emulatorEnv({ PHOTOS, PHOTO_LINK_KEY: 'test-photo-link-key' });
 
 beforeEach(() => {
-  // The Auth emulator knows every user these tests sign in as.
-  vi.spyOn(globalThis, 'fetch').mockImplementation(async (_url, init) => {
-    const { localId } = JSON.parse(String(init?.body)) as { localId: string[] };
-    return Response.json({ users: [{ localId: localId[0] }] });
-  });
+  // The Auth emulator knows every user these tests sign in as, and Firestore has their records.
+  mockEmulators();
 });
 
 afterEach(() => {

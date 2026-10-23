@@ -1,6 +1,8 @@
 import { base64url, exportJWK, exportPKCS8, generateKeyPair, SignJWT, type JWK } from 'jose';
+import { vi } from 'vitest';
 
 import type { Env } from './env';
+import { FakeFirestore } from './fake-firestore';
 
 export const PROJECT_ID = 'nkabom-staging';
 
@@ -55,4 +57,28 @@ export function signToken(privateKey: CryptoKey, kid: string, payload: Record<st
 export function unsignedToken(payload: Record<string, unknown>) {
   const part = (value: unknown) => base64url.encode(JSON.stringify(value));
   return `${part({ alg: 'none', typ: 'JWT' })}.${part(payload)}.`;
+}
+
+// Stands in for the Auth and Firestore emulators: Auth knows every user, and Firestore is the
+// given fake.
+export function mockEmulators(firestore = new FakeFirestore()) {
+  const fetch = vi.spyOn(globalThis, 'fetch').mockImplementation(async (input, init) => {
+    const url = input instanceof Request ? input.url : String(input);
+    if (url.endsWith('accounts:lookup')) {
+      const { localId } = JSON.parse(String(init?.body)) as { localId: string[] };
+      return Response.json({ users: [{ localId: localId[0] }] });
+    }
+    if (firestore.handles(url)) {
+      return firestore.handle(url, init);
+    }
+    return new Response('unexpected request', { status: 500 });
+  });
+  return { firestore, fetch };
+}
+
+// A signed-in request's headers for the emulator project.
+export function signedIn(uid = 'ama', extra: Record<string, unknown> = {}) {
+  return {
+    Authorization: `Bearer ${unsignedToken({ ...claims('demo-nkabom', uid), ...extra })}`,
+  };
 }

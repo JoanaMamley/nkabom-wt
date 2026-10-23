@@ -41,8 +41,20 @@ describe('verifyIdToken', () => {
 
     await expect(verifyIdToken(token, stagingEnv(), keys)).resolves.toEqual({
       uid: 'ama',
+      name: null,
       email: 'ama@example.com',
       emailVerified: true,
+    });
+  });
+
+  it('includes the display name when the account has one', async () => {
+    const token = await signToken(google.privateKey, 'google-1', {
+      ...claims(),
+      name: 'Ama Mensah',
+    });
+
+    await expect(verifyIdToken(token, stagingEnv(), keys)).resolves.toMatchObject({
+      name: 'Ama Mensah',
     });
   });
 

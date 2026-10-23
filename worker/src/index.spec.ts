@@ -11,8 +11,10 @@ import {
 } from './test-helpers';
 
 const ORIGIN = 'https://nkabom-staging.web.app';
-const USERS_DOC =
-  'https://firestore.googleapis.com/v1/projects/nkabom-staging/databases/(default)/documents/users/ama';
+const DOCUMENTS =
+  'https://firestore.googleapis.com/v1/projects/nkabom-staging/databases/(default)/documents';
+const USERS_DOC = `${DOCUMENTS}/users/ama`;
+const COMMIT = `${DOCUMENTS}:commit`;
 
 let google: Awaited<ReturnType<typeof signingKey>>;
 let serviceAccount: string;
@@ -44,6 +46,9 @@ function mockGoogle(
     }
     if (url === USERS_DOC) {
       return usersDoc.clone();
+    }
+    if (url === COMMIT) {
+      return Response.json({ commitTime: '2026-10-23T10:00:00Z' });
     }
     return new Response('unexpected request', { status: 500 });
   });
@@ -92,13 +97,29 @@ describe('GET /v1/me', () => {
     expect(firestoreCall?.[1]?.headers).toEqual({ Authorization: 'Bearer google-access-token' });
   });
 
-  it('answers a null role when the user has no record yet', async () => {
-    mockGoogle(new Response('{}', { status: 404 }));
+  it('creates the users record on a new account’s first call', async () => {
+    const fetch = mockGoogle(new Response('{}', { status: 404 }));
     const token = await signToken(google.privateKey, 'google-1', claims());
 
     const response = await call('/v1/me', { headers: { Authorization: `Bearer ${token}` } });
 
-    expect(await response.json()).toEqual({ uid: 'ama', role: null });
+    expect(await response.json()).toEqual({ uid: 'ama', role: 'member' });
+    const [, init] = fetch.mock.calls.find(([url]) => String(url).endsWith(':commit'))!;
+    expect(JSON.parse(String(init?.body))).toEqual({
+      writes: [
+        {
+          update: {
+            name: 'projects/nkabom-staging/databases/(default)/documents/users/ama',
+            fields: {
+              role: { stringValue: 'member' },
+              email: { stringValue: 'ama@example.com' },
+            },
+          },
+          currentDocument: { exists: false },
+          updateTransforms: [{ fieldPath: 'createdAt', setToServerValue: 'REQUEST_TIME' }],
+        },
+      ],
+    });
   });
 
   it('answers 500 without details when Firestore fails', async () => {
