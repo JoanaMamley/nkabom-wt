@@ -43,7 +43,9 @@ export async function sendSmtp(
   try {
     await Promise.race([session.send(message), timeout]);
   } finally {
-    clearTimeout(timer);
+    if (timer !== undefined) {
+      clearTimeout(timer);
+    }
     await connection.close().catch(() => undefined);
   }
 }
