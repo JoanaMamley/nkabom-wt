@@ -3,9 +3,10 @@ import { preflight, withCors } from './cors';
 import type { Env } from './env';
 import { getDocument } from './firestore';
 import { HttpError, json } from './http';
+import { getPhotoDownloadUrl, getPhotoUploadUrl, servePhoto } from './photos';
 
 // The app's API (NKB-114). Writes with side effects go through here; the app reads Firestore
-// directly. Each endpoint except /health starts with requireUser.
+// directly. Each endpoint except /health and the signed photo links starts with requireUser.
 export default {
   async fetch(request, env): Promise<Response> {
     if (request.method === 'OPTIONS') {
@@ -33,6 +34,9 @@ async function handle(request: Request, env: Env): Promise<Response> {
 
 async function route(request: Request, env: Env): Promise<Response> {
   const { pathname } = new URL(request.url);
+  if (pathname.startsWith('/photos/')) {
+    return servePhoto(request, env);
+  }
   switch (pathname) {
     case '/health':
       allow(request, 'GET');
@@ -44,6 +48,12 @@ async function route(request: Request, env: Env): Promise<Response> {
       const record = await getDocument(env, `users/${user.uid}`);
       return json({ uid: user.uid, role: record?.['role'] ?? null });
     }
+    case '/v1/photos/upload-url':
+      allow(request, 'POST');
+      return getPhotoUploadUrl(request, env, await requireUser(request, env));
+    case '/v1/photos/download-url':
+      allow(request, 'POST');
+      return getPhotoDownloadUrl(request, env, await requireUser(request, env));
     default:
       throw new HttpError(404, 'Not found');
   }

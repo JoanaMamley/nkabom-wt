@@ -15,7 +15,7 @@ service cloud.firestore {
 
     // members/{uid}: the member's profile. The document ID is the user ID, so a user can create
     // only their own profile and only once: a second write is an update, which is denied (FR-2.6).
-    // The photo must be one uploaded to the member's own folder (functions/src/photos.ts).
+    // The photo must be one uploaded to the member's own folder (worker/src/photos.ts).
     match /members/{uid} {
       allow get: if isSelf(uid);
       allow create: if isSelf(uid) && isNewProfile(request.resource.data);
