@@ -91,7 +91,7 @@ npm run lint && npm run format:check && npm run check:contrast && npm test -- --
 | `staging`    | `nkabom-staging` | Trying changes against real services     |
 | `production` | `nkabom-prod`    | The live app                             |
 
-Both real projects belong to the shared project Google account (NKB-113) and are on the Blaze plan, which scheduled functions and Firestore exports need. Because the default alias is the demo project, a bare `firebase deploy` fails instead of reaching a real project: always name one.
+Both real projects belong to the shared project Google account (NKB-113). They stay on the free Spark plan, and server code moves from Cloud Functions to a Cloudflare Worker (NKB-115 to NKB-121), since the Blaze plan that Cloud Functions, scheduled functions and Firestore exports need could not be turned on without paying. Until NKB-121, the sections below still describe the Cloud Functions set-up. Because the default alias is the demo project, a bare `firebase deploy` fails instead of reaching a real project: always name one.
 
 Deploy by hand with `npm run deploy:staging` or `npm run deploy:production`. Each builds the app with that project's config and deploys Hosting, Cloud Functions, and Firestore rules and indexes together. Sign in first with `npx firebase login`, using the shared project account. Automated deploys come in NKB-114.
 
@@ -99,9 +99,9 @@ Firebase Hosting serves only HTTPS (FR-8.2): it redirects plain HTTP and sends a
 
 ### Setting up a project
 
-The shared project accounts (Google, Cloudflare, Brevo) and how to recover them are in [docs/handbook/accounts.md](docs/handbook/accounts.md).
+Create the shared project accounts (Google, Cloudflare, Brevo) first, following [docs/handbook/account-setup.md](docs/handbook/account-setup.md), which also walks through steps 1, 3 and 4 below in the consoles. How the accounts are protected and recovered is in [docs/handbook/accounts.md](docs/handbook/accounts.md).
 
-Once for each of `nkabom-staging` and `nkabom-prod`, signed in as the shared project account:
+The projects stay on Spark, so skip the Blaze, budget and backup bucket steps (2, 7 and 8); the Worker set-up replaces steps 5 and 6 in NKB-115. Once for each of `nkabom-staging` and `nkabom-prod`, signed in as the shared project account:
 
 1. In the [Firebase console](https://console.firebase.google.com), create the project with exactly that ID. If the ID is taken, choose another and change it in `.firebaserc`, the `functions/.env.<project ID>` file name, its `BACKUP_BUCKET`, and `.gitignore`.
 2. Upgrade to the Blaze plan under **Usage and billing**.
@@ -221,8 +221,9 @@ Brevo's free plan sends up to 300 emails a day, shared by staging and production
 
 1. Once: create a Brevo account with the shared project Google account (NKB-113).
 2. Once: **Senders, domains and dedicated IPs > Domains**: add the sending domain and add the DNS records Brevo shows (DKIM, DMARC, and the Brevo code), so mail is not marked as spam.
-3. Per project: **SMTP & API > API keys**: create a key named after the project (so one can be revoked without the other), then run `firebase functions:secrets:set BREVO_API_KEY --project staging` (or `production`).
-4. The first deploy asks for `EMAIL_FROM`, an address on that domain.
+3. Once: **Security > Authorized IPs > Deactivate blocking.** The server sends from changing addresses, so Brevo's IP blocking would otherwise start rejecting it once it stops learning new ones.
+4. Per project: **SMTP & API > API keys**: create a key named after the project (so one can be revoked without the other), then run `firebase functions:secrets:set BREVO_API_KEY --project staging` (or `production`).
+5. The first deploy asks for `EMAIL_FROM`, an address on that domain.
 
 ## Scheduled jobs
 

@@ -1,5 +1,7 @@
 # Costs and the budget alert
 
+> **Being replaced.** The projects stay on the free Spark plan, which cannot be billed, and server code moves to a Cloudflare Worker on its free plan (NKB-115 to NKB-121). The budgets, the cap and the instance limit below are never set up, and NKB-121 rewrites this page. The monthly usage checks still apply.
+
 Nkabom should cost less than $5 a month (requirements, Technology). Firebase's Blaze plan needs a card on file, so a budget watches the spending and turns billing off before it gets far. This page says what is set up, what to check each month, and what to do when an alert email arrives.
 
 Everything here is done signed in as the shared project Google account.
