@@ -1,0 +1,49 @@
+// One Worker per environment, on the free plan at its workers.dev address (NKB-114).
+// The top level is for local development (wrangler dev) against the Firebase emulators; staging and
+// production do not inherit its vars or KV namespaces, so the emulator settings never reach them.
+// Secrets are set per environment with wrangler secret put (see the README), never here.
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "nkabom-api",
+  "main": "src/index.ts",
+  "compatibility_date": "2026-10-01",
+  "workers_dev": true,
+  "preview_urls": false,
+  "observability": { "enabled": true },
+  "vars": {
+    "FIREBASE_PROJECT_ID": "demo-nkabom",
+    "ALLOWED_ORIGINS": "http://localhost:4200",
+    "FIRESTORE_EMULATOR_HOST": "127.0.0.1:8080",
+    "FIREBASE_AUTH_EMULATOR_HOST": "127.0.0.1:9099",
+  },
+  // Local KV is simulated by wrangler dev, so these IDs are only labels.
+  "kv_namespaces": [
+    { "binding": "PHOTOS", "id": "local-photos" },
+    { "binding": "BACKUPS", "id": "local-backups" },
+  ],
+  "env": {
+    "staging": {
+      "name": "nkabom-api-staging",
+      "vars": {
+        "FIREBASE_PROJECT_ID": "nkabom-staging",
+        "ALLOWED_ORIGINS": "https://nkabom-staging.web.app,https://nkabom-staging.firebaseapp.com",
+      },
+      // IDs from npx wrangler kv namespace create (see the README). They are not secret.
+      "kv_namespaces": [
+        { "binding": "PHOTOS", "id": "ed86557f77284290b2c5ccccc4140ef3" },
+        { "binding": "BACKUPS", "id": "f33b56df355f4a3fb5c4c1aacd323c00" },
+      ],
+    },
+    "production": {
+      "name": "nkabom-api-prod",
+      "vars": {
+        "FIREBASE_PROJECT_ID": "nkabom-prod",
+        "ALLOWED_ORIGINS": "https://nkabom-prod.web.app,https://nkabom-prod.firebaseapp.com",
+      },
+      "kv_namespaces": [
+        { "binding": "PHOTOS", "id": "a65fc0d43e434c8397c1c6c5a1eaebcf" },
+        { "binding": "BACKUPS", "id": "2159c3a238934c0bb6080867656dcec8" },
+      ],
+    },
+  },
+}

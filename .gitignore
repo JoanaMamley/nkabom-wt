@@ -66,3 +66,8 @@ service-account*.json
 
 # Cloud Functions build output
 functions/lib/
+
+# Cloudflare Worker: local state, dry-run build, and local secrets
+worker/.wrangler/
+worker/dist/
+.dev.vars*

@@ -113,13 +113,13 @@ If you already turned on the Gmail API or started the Google Auth Platform sign-
 
 1. Sign the Firebase CLI in: `npx firebase login`, choosing the shared account. If it is already signed in as your own account, run `npx firebase login:add` and choose the shared account, then `npx firebase login:use <address>`.
 2. Check it: `npx firebase projects:list` shows `nkabom-staging` and `nkabom-prod`.
-Later, not now: the Worker is the server code that NKB-114 adds to this repo. It is put on Cloudflare with `wrangler`, Cloudflare's command-line tool, which NKB-114 also adds. Once that story is done, sign it in once with `npx wrangler login`: a browser opens, you sign in to the shared Cloudflare account, and click **Allow**. Running the command before then fails, because `wrangler` is not in the repo yet.
+Later: the Worker, the server code in `worker/`, is put on Cloudflare with `wrangler`, Cloudflare's command-line tool. Sign it in once with `npx wrangler login`: a browser opens, you sign in to the shared Cloudflare account, and click **Allow**. This is step 1 of [Setting up the Worker](../../README.md#setting-up-the-worker) in the README (NKB-114).
 
 ## Next
 
 That completes NKB-113. The rest of the set-up comes with the stories that need it, each following its README steps:
 
-- **NKB-114:** create the service account key (**Project settings > Service accounts > Generate new private key**), set the Worker secrets for each environment (the service account key and the photo-link signing key), create the Workers KV namespaces for photos and backups, and do the first deploy to staging: Hosting, Firestore rules and the Worker.
+- **NKB-114:** follow [Setting up the Worker](../../README.md#setting-up-the-worker) in the README: sign `wrangler` in, create the Workers KV namespaces for photos and backups, deploy staging (Hosting, Firestore rules and the Worker), set the Worker secrets for each environment (the service account key and the photo-link signing key), and check staging.
 - **NKB-116:** make the Gmail app password and set it as a Worker secret.
 - **NKB-118:** check the scheduled triggers run on staging.
 - **NKB-119:** test a backup restore, then record it in the README.
