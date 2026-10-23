@@ -35,7 +35,7 @@ Cloudflare uses the Gmail address, so whoever controls that mailbox can reset it
 - **Only the developer signs in.** Executives use the app as admins and do not need the account or the consoles.
 - **No card is on Google.** Both Firebase projects stay on the free Spark plan, which cannot be billed.
 - **No card is on Cloudflare either.** The Workers and Workers KV free plans need none, and past their daily limits requests fail until midnight UTC instead of being charged. R2 is not used, because it needs a payment method on file.
-- **Sending email** goes through the Gmail API with an authorisation (a refresh token) given once by the shared account. It exists only as a Worker secret. To cancel it, remove **Nkabom** under **Google Account > Security > Your connections to third-party apps & services**; changing the password also cancels it.
+- **Sending email** goes through Gmail's mail server with an app password, a 16-character password Google makes for one program. It can read the mailbox as well as send, so it exists only as a Worker secret: never in the repo, a file or the private record. To cancel it, remove it at [myaccount.google.com/apppasswords](https://myaccount.google.com/apppasswords); changing the account's password also cancels it.
 - **The service account key** lets the Worker act on Firestore, Firebase Auth, push and the calendar with admin rights. It exists only as a Worker secret in each environment: never in the repo, a file or the private record. If it may have leaked, delete it in the Google Cloud console (**IAM & Admin > Service accounts**), create a new one and set it on the Worker again.
 
 When a backup code is used, update the private record. When fewer than 3 are left, sign in and print a new set (**Google Account > Security > Backup codes**), and destroy the old sheet.
@@ -52,5 +52,5 @@ When the account is handed over:
 
 1. The new owner changes every password and 2-step method, and sets up their own backup codes, recovery email and phone.
 2. They replace the service account key, as above, so no copy held by the previous developer still works.
-3. Changing the Google password cancels the Gmail sending authorisation, so they authorise it again (README, Email).
+3. Changing the Google password cancels the app password, so email stops until they make a new one and set it on the Worker (README, Email).
 4. They start their own private accounts record.

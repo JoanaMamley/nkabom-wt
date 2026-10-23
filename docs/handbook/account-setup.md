@@ -98,35 +98,22 @@ Add the Cloudflare password, 2-step method and recovery codes to the private acc
 
 ## 4. Sending email from Gmail
 
-The app's email is sent from the shared account's Gmail address, through the Gmail API, so no domain or email service is needed. This part prepares the production project; the authorisation itself is done in NKB-117. In the browser profile signed in as the shared account:
+The app's email is sent from the shared account's Gmail address, through Gmail's mail server with an app password, so no domain or email service is needed. Nothing to set up now beyond 2-Step Verification, which section 1 turned on: app passwords only exist on accounts that have it. The app password itself is made in NKB-117 at [myaccount.google.com/apppasswords](https://myaccount.google.com/apppasswords) and set straight away as a Worker secret, so it is never kept anywhere else.
 
-### Turn on the Gmail API
-
-1. Go to [console.cloud.google.com](https://console.cloud.google.com) and choose `nkabom-prod` in the project picker at the top.
-2. **APIs & Services > Library**, search for **Gmail API**, open it and click **Enable**. It is free and works on the Spark plan.
-
-### Set up the sign-in screen
-
-1. Open **Google Auth Platform** from the menu (in some layouts **APIs & Services > OAuth consent screen**) and click **Get started**.
-2. **App name:** `Nkabom`. **User support email:** the shared Gmail address. **Next.**
-3. **Audience: External.** **Next.**
-4. **Contact information:** the shared Gmail address. **Next**, agree to the policy, and **Create**.
-5. **Audience > Publish app > Confirm**, so the status shows **In production**. Do this before NKB-117 creates the authorisation: while the app is in **Testing**, Google cancels it after 7 days.
-
-You do not need Google to verify the app. Only the shared account ever signs in to it, and it accepts the "Google hasn't verified this app" warning once, in NKB-117.
+If you already turned on the Gmail API or started the Google Auth Platform sign-in screen in `nkabom-prod`, leave them as they are. The Gmail API is not used but costs nothing, and the sign-in screen is needed for Google login, which publishes it in NKB-204.
 
 ## 5. Tools
 
 1. Sign the Firebase CLI in: `npx firebase login`, choosing the shared account. If it is already signed in as your own account, run `npx firebase login:add` and choose the shared account, then `npx firebase login:use <address>`.
 2. Check it: `npx firebase projects:list` shows `nkabom-staging` and `nkabom-prod`.
-3. From NKB-115, the Worker is deployed with Cloudflare's `wrangler` CLI: `npx wrangler login`, signing in to the shared Cloudflare account.
+Later, not now: the Worker is the server code that NKB-115 adds to this repo. It is put on Cloudflare with `wrangler`, Cloudflare's command-line tool, which NKB-115 also adds. Once that story is done, sign it in once with `npx wrangler login`: a browser opens, you sign in to the shared Cloudflare account, and click **Allow**. Running the command before then fails, because `wrangler` is not in the repo yet.
 
 ## Next
 
 The rest of NKB-113 needs the Worker stories first:
 
 - **NKB-115:** create the service account key (**Project settings > Service accounts > Generate new private key**), set the Worker secrets for each environment (the service account key and the photo-link signing key), create the Workers KV namespaces for photos and backups, and deploy staging: Hosting, Firestore rules and the Worker.
-- **NKB-117:** create the Gmail OAuth client, authorise sending once as the shared account, and set the result as a Worker secret.
+- **NKB-117:** make the Gmail app password and set it as a Worker secret.
 - **NKB-119:** check the scheduled triggers run on staging.
 - **NKB-120:** test a backup restore, then record it in the README.
 
