@@ -117,7 +117,7 @@ The projects stay on Spark, so skip the Blaze, budget and backup bucket steps (2
 2. Upgrade to the Blaze plan under **Usage and billing**.
 3. **Firestore Database > Create database** in production mode. The location cannot be changed later; use the same one for both projects.
 4. **Project settings > Your apps**: add a web app, then copy its config into `src/environments/environment.staging.ts` (staging) or `environment.ts` (production), locally only (see [Configuration and secrets](#configuration-and-secrets)).
-5. Set the secrets for photos and email (see [Setting up a bucket](#setting-up-a-bucket) and [Setting up Brevo](#setting-up-brevo)), adding `--project staging` or `--project production`.
+5. Set the email secret (see [Setting up Brevo](#setting-up-brevo)), adding `--project staging` or `--project production`. Photos no longer need one here: they use the Worker's `PHOTO_LINK_KEY`.
 6. Run `npm run deploy:staging` (or `deploy:production`). The first deploy asks for any setting missing from the `.env` file, such as `EMAIL_FROM`, and saves the answer there; commit it.
 7. Create the backup bucket: `scripts/create-backup-bucket.sh nkabom-staging` (or `nkabom-prod`; see [Backups](#backups)). It comes after the first deploy, which creates the service account the backup runs as.
 8. Set the budget and its cap: `scripts/create-budget.sh nkabom-staging 0.50` or `scripts/create-budget.sh nkabom-prod 1.50` (see [Costs](#costs)).
@@ -134,12 +134,14 @@ The app's API is one Cloudflare Worker per environment, on the free plan at its 
 
 Writes with side effects (registration, profile edits, approvals, admin changes, mentorship, publishing, exports) go through it; the app reads Firestore directly. The code is in [worker/src/](worker/src/).
 
-Every endpoint except `/health` starts by checking the caller's Firebase ID token with `requireUser` from [worker/src/auth.ts](worker/src/auth.ts), so admin routes are enforced on the server, not only hidden in the app (FR-1.11). The token must be signed by Google, issued for that environment's project, unexpired, and name a user; otherwise the answer is `401`. The Worker then reaches Firestore through its REST API, as the project's service account, which bypasses the Firestore rules the way the Admin SDK does. For now it only reads (`getDocument`); the stories that move writes to the Worker add writes and Firebase Auth calls the same way.
+Every endpoint except `/health` and the signed photo links starts by checking the caller's Firebase ID token with `requireUser` from [worker/src/auth.ts](worker/src/auth.ts), so admin routes are enforced on the server, not only hidden in the app (FR-1.11). The token must be signed by Google, issued for that environment's project, unexpired, and name a user; otherwise the answer is `401`. The Worker then reaches Firestore through its REST API, as the project's service account, which bypasses the Firestore rules the way the Admin SDK does. For now it only reads (`getDocument`); the stories that move writes to the Worker add writes and Firebase Auth calls the same way.
 
 | Endpoint      | Needs sign-in | Returns                                                                      |
 | ------------- | ------------- | ---------------------------------------------------------------------------- |
 | `GET /health` | No            | `{ ok: true }`                                                               |
 | `GET /v1/me`  | Yes           | `{ uid, role }`: the caller's role from `users/{uid}`, or `null` without one |
+
+The photo endpoints are listed under [Photo storage](#photo-storage).
 
 `/v1/me` is the test endpoint for this set-up. Send the token as `Authorization: Bearer <ID token>`. Errors come back as `{ error }` with the status; an unexpected failure is a `500` whose details go only to the Worker's log, as `Request failed`.
 
@@ -149,15 +151,15 @@ Every endpoint except `/health` starts by checking the caller's Firebase ID toke
 
 ### Settings and secrets
 
-| Name                          | Kind    | Value                                                                              |
-| ----------------------------- | ------- | ---------------------------------------------------------------------------------- |
-| `FIREBASE_PROJECT_ID`         | setting | `nkabom-staging` or `nkabom-prod`; `demo-nkabom` locally                           |
-| `ALLOWED_ORIGINS`             | setting | Origins allowed by CORS, comma-separated                                           |
-| `FIRESTORE_EMULATOR_HOST`     | setting | Local only: the Firestore emulator                                                 |
-| `FIREBASE_AUTH_EMULATOR_HOST` | setting | Local only: the Auth emulator                                                      |
-| `PHOTOS`, `BACKUPS`           | KV      | The environment's Workers KV namespaces for photos (NKB-115) and backups (NKB-119) |
-| `GOOGLE_SERVICE_ACCOUNT`      | secret  | The project's Firebase service account key, the whole JSON file                    |
-| `PHOTO_LINK_KEY`              | secret  | A random key that signs photo links (NKB-115)                                      |
+| Name                          | Kind    | Value                                                                                            |
+| ----------------------------- | ------- | ------------------------------------------------------------------------------------------------ |
+| `FIREBASE_PROJECT_ID`         | setting | `nkabom-staging` or `nkabom-prod`; `demo-nkabom` locally                                         |
+| `ALLOWED_ORIGINS`             | setting | Origins allowed by CORS, comma-separated                                                         |
+| `FIRESTORE_EMULATOR_HOST`     | setting | Local only: the Firestore emulator                                                               |
+| `FIREBASE_AUTH_EMULATOR_HOST` | setting | Local only: the Auth emulator                                                                    |
+| `PHOTOS`, `BACKUPS`           | KV      | The environment's Workers KV namespaces for photos (NKB-115) and backups (NKB-119)               |
+| `GOOGLE_SERVICE_ACCOUNT`      | secret  | The project's Firebase service account key, the whole JSON file                                  |
+| `PHOTO_LINK_KEY`              | secret  | A random key that signs photo links; a fixed value locally (see [Photo storage](#photo-storage)) |
 
 Settings and KV namespace IDs are in [worker/wrangler.jsonc](worker/wrangler.jsonc). The staging and production blocks do not inherit the local ones, so the emulator settings never reach a deployed Worker, and the Worker also accepts emulator tokens only for a `demo-` project. Secrets are set per environment with `npx wrangler secret put NAME --env staging` (or `production`), run in `worker/`; each one is stored encrypted by Cloudflare and cannot be read back. Worker secrets are free.
 
@@ -265,56 +267,24 @@ Every page has a light and a dark mode (FR-8.8 to FR-8.10). On a first visit the
 - **Contrast:** `npm run check:contrast` checks every text colour against both backgrounds at WCAG AA (4.5:1) and borders and controls at 3:1, in both modes. CI runs it, so a colour change that makes text hard to read fails the build.
 - **No flash:** a small inline script in `src/index.html` applies a saved choice before the page first paints. [src/app/core/theme.ts](src/app/core/theme.ts) takes over once the app starts, and also sets the browser bar colour.
 
-## Photo storage (Cloudflare R2)
+## Photo storage
 
-Being replaced: R2 needs a payment method on file, so NKB-115 moves photos to Workers KV, with links signed by the Worker. Do not set up the R2 buckets below.
+Photos live in the Worker's private `PHOTOS` Workers KV namespace, one per environment (FR-2.3, FR-8.2). Nothing else can read it: the browser asks the Worker for a short-lived signed link, then uploads or downloads through the Worker with that link. The code is in [worker/src/photos.ts](worker/src/photos.ts).
 
-Photos live in a private R2 bucket. The browser never gets the bucket's keys: it calls a Cloud Function for a short-lived signed link and uploads or downloads with that.
+| Endpoint                       | Takes                   | Returns                                                      |
+| ------------------------------ | ----------------------- | ------------------------------------------------------------ |
+| `POST /v1/photos/upload-url`   | `{ contentType, size }` | `{ url, path, expiresIn }`: a 5-minute PUT link and the path |
+| `POST /v1/photos/download-url` | `{ path }`              | `{ url, expiresIn }`: a 10-minute GET link                   |
 
-| Function              | Takes                   | Returns                                                      |
-| --------------------- | ----------------------- | ------------------------------------------------------------ |
-| `getPhotoUploadUrl`   | `{ contentType, size }` | `{ url, path, expiresIn }`: a 5-minute PUT link and the path |
-| `getPhotoDownloadUrl` | `{ path }`              | `{ url, expiresIn }`: a 10-minute GET link                   |
+Both need a sign-in, like every endpoint. The links themselves do not: they point at the Worker's own address, `/photos/{uid}/{uuid}.{ext}`, and carry an HMAC-SHA256 signature over the method, path and expiry (and, for uploads, the type and size), keyed by the `PHOTO_LINK_KEY` secret. A link that is missing, changed, expired, or used for the other method is refused with `403`.
 
-The upload link accepts only a file of the declared type (JPG, PNG or WebP) and exact size (up to 5 MB): PUT it with that `Content-Type`. Save the returned `path` as the profile's `photoPath`; the Firestore rules accept only a path in the member's own `photos/{uid}/` folder. For now members can download only their own photo.
+The upload link accepts only a file of the declared type (JPG, PNG or WebP) and exact size (up to 5 MB): PUT it with that `Content-Type`, and the Worker answers `204`. Save the returned `path` as the profile's `photoPath`; the Firestore rules accept only a path in the member's own `photos/{uid}/` folder. For now members can download only their own photo; admins (NKB-208) and the directory (NKB-601) add their own checks in `getPhotoDownloadUrl`.
 
-Without R2 settings the emulators still run, and both functions answer `failed-precondition` ("Photo storage is not configured").
+Photos are resized in the browser to about 100 KB (NKB-302), so 1,000 members use about 100 MB of KV's free 1 GB. Each upload is one of KV's free 1,000 writes a day, a limit shared by both environments and the backups (NKB-119). KV is eventually consistent: a new photo can take up to a minute to appear outside the place it was uploaded from, so the app should show the file it just uploaded rather than download it again.
 
-### Setting up a bucket
+Locally, `wrangler dev` keeps photos in its local KV in `worker/.wrangler/`, and signs links with the `PHOTO_LINK_KEY` in `wrangler.jsonc`, so no secret is needed. Without `PHOTO_LINK_KEY`, both endpoints answer `503` ("Photo storage is not configured").
 
-Once per Firebase project (staging and production), in the shared project Cloudflare account:
-
-1. **R2 > Create bucket**: `nkabom-photos` for production, `nkabom-photos-staging` for staging (the `R2_BUCKET` in each `functions/.env.<project ID>`). Both live in one Cloudflare account, so the names must differ. Leave public access off (no r2.dev URL, no custom domain), so files open only through signed links.
-2. In the bucket's **Settings > CORS policy**, allow the app to upload and download:
-
-   ```json
-   [
-     {
-       "AllowedOrigins": [
-         "http://localhost:4200",
-         "https://<project ID>.web.app",
-         "https://<project ID>.firebaseapp.com"
-       ],
-       "AllowedMethods": ["GET", "PUT"],
-       "AllowedHeaders": ["Content-Type"],
-       "MaxAgeSeconds": 3600
-     }
-   ]
-   ```
-
-3. **R2 > Manage API tokens > Create API token** with **Object Read & Write**, limited to this bucket. Note the access key ID and secret access key; the secret is shown once.
-4. Store the three values as one secret, `R2_CREDENTIALS`, in JSON (the account ID is on the R2 overview page):
-
-   ```sh
-   printf '%s' '{"accountId":"…","accessKeyId":"…","secretAccessKey":"…"}' \
-     | firebase functions:secrets:set R2_CREDENTIALS --data-file=- --project staging
-   ```
-
-   One secret instead of three keeps Secret Manager free (see [Configuration and secrets](#configuration-and-secrets)).
-
-Add a custom domain to `AllowedOrigins` if the app later gets one. Leave `localhost` out of the production bucket's list.
-
-To use a real bucket from the emulators, put the same JSON in `functions/.secret.local` (git-ignored), in single quotes: `R2_CREDENTIALS='{"accountId":"…",…}'`.
+The R2 photo functions from NKB-105 are still in `functions/` and unused; NKB-120 removes them with the rest of the Cloud Functions set-up. Do not set up R2 buckets.
 
 ## Email
 
@@ -406,7 +376,7 @@ What to check each month, and what to do when an alert arrives, is in the handbo
 
 `backupFirestore` in [functions/src/backups.ts](functions/src/backups.ts) exports the whole Firestore database every day at 02:00 Accra time (FR-8.6), to `BACKUP_BUCKET/firestore/<UTC time>`, for example `gs://nkabom-prod-backups/firestore/2026-10-20T02-00-00Z`. It is a [scheduled job](#scheduled-jobs), so a failed export is retried and logged. The bucket deletes exports after 30 days.
 
-Exports hold Firestore only. Photos are in R2 and Auth accounts in Firebase Auth, neither of which this covers.
+Exports hold Firestore only. Photos are in Workers KV and Auth accounts in Firebase Auth, neither of which this covers.
 
 ### Setting up the backup bucket
 
