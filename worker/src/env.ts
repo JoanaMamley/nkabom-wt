@@ -11,6 +11,20 @@ export interface Env {
   GOOGLE_SERVICE_ACCOUNT?: string;
   /** Secret: signs photo links (NKB-115). */
   PHOTO_LINK_KEY?: string;
+  /** The app's address, for links in emails. */
+  APP_URL: string;
+  /** "gmail" (the default), "brevo", or "log" to write emails to the log instead. */
+  EMAIL_PROVIDER?: string;
+  /** Sender name (default Nkabom). */
+  EMAIL_FROM_NAME?: string;
+  /** Sender address, for Brevo and the log only; Gmail sends from GMAIL_USER. */
+  EMAIL_FROM?: string;
+  /** Secret: the shared project account's Gmail address, which emails are sent from. */
+  GMAIL_USER?: string;
+  /** Secret: an app password for that account, made at myaccount.google.com/apppasswords. */
+  GMAIL_APP_PASSWORD?: string;
+  /** Secret: only if EMAIL_PROVIDER is brevo. */
+  BREVO_API_KEY?: string;
   PHOTOS: KVNamespace;
   BACKUPS: KVNamespace;
 }

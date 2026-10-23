@@ -1,8 +1,8 @@
-import { info } from 'firebase-functions/logger';
+import { buildMessage, checkAddress } from './mime';
+import { sendSmtp, type Connect } from './smtp';
 
-// Transactional email providers. Each one only delivers a rendered message; templates and
-// failure logging live in email.ts, so adding a provider means adding one function here and one
-// case in email.ts.
+// Email providers. Each one only delivers a rendered message; templates and failure logging live
+// in email.ts, so adding a provider means adding one function here and one case in email.ts.
 
 export const SEND_TIMEOUT_MS = 10_000;
 
@@ -27,9 +27,41 @@ export interface EmailProvider {
   send(message: OutgoingEmail): Promise<void>;
 }
 
+/**
+ * Gmail's mail server, as the shared project account, with an app password (the account has
+ * 2-Step Verification). The message is sent from that account's own address.
+ */
+export function gmail(user: string, appPassword: string, open?: Connect): EmailProvider {
+  return {
+    name: 'gmail',
+    async send(message) {
+      if (!user || !appPassword) {
+        throw new Error('GMAIL_USER and GMAIL_APP_PASSWORD are not set');
+      }
+      await sendSmtp(
+        {
+          host: 'smtp.gmail.com',
+          port: 465,
+          user,
+          // Google shows app passwords in groups of four; the spaces are not part of it.
+          password: appPassword.replace(/\s+/g, ''),
+          from: checkAddress(message.from.email),
+          to: checkAddress(message.to.email),
+          data: buildMessage(message),
+        },
+        SEND_TIMEOUT_MS,
+        open,
+      );
+    },
+  };
+}
+
 const BREVO_URL = 'https://api.brevo.com/v3/smtp/email';
 
-/** Brevo's transactional email API. The free plan allows 300 emails a day. */
+/**
+ * Brevo's transactional email API. The free plan allows 300 emails a day, but needs a sending
+ * domain the project does not have, so it is kept only as an alternative.
+ */
 export function brevo(apiKey: string): EmailProvider {
   return {
     name: 'brevo',
@@ -65,14 +97,14 @@ export function brevo(apiKey: string): EmailProvider {
 }
 
 /**
- * Writes the message to the Functions log instead of sending it, for the emulators. Never use it
- * in a deployed project: the log would hold one-time links such as set-password links.
+ * Writes the message to the Worker's log instead of sending it, for local development. Never use
+ * it in a deployed Worker: the log would hold one-time links such as set-password links.
  */
 export function logOnly(): EmailProvider {
   return {
     name: 'log',
     async send(message) {
-      info('Email not sent (EMAIL_PROVIDER=log)', {
+      console.log('Email not sent (EMAIL_PROVIDER=log)', {
         to: message.to.email,
         subject: message.subject,
         text: message.text,

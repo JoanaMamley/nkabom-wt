@@ -17,6 +17,9 @@
     "FIREBASE_AUTH_EMULATOR_HOST": "127.0.0.1:9099",
     // Local only, so photo links work without secrets. Deployed Workers use the secret instead.
     "PHOTO_LINK_KEY": "local-photo-link-key",
+    "APP_URL": "http://localhost:4200",
+    // Emails, links included, are written to the wrangler dev log instead of being sent.
+    "EMAIL_PROVIDER": "log",
   },
   // Local KV is simulated by wrangler dev, so these IDs are only labels.
   "kv_namespaces": [
@@ -29,6 +32,8 @@
       "vars": {
         "FIREBASE_PROJECT_ID": "nkabom-staging",
         "ALLOWED_ORIGINS": "https://nkabom-staging.web.app,https://nkabom-staging.firebaseapp.com",
+        "APP_URL": "https://nkabom-staging.web.app",
+        "EMAIL_PROVIDER": "gmail",
       },
       // IDs from npx wrangler kv namespace create (see the README). They are not secret.
       "kv_namespaces": [
@@ -41,6 +46,8 @@
       "vars": {
         "FIREBASE_PROJECT_ID": "nkabom-prod",
         "ALLOWED_ORIGINS": "https://nkabom-prod.web.app,https://nkabom-prod.firebaseapp.com",
+        "APP_URL": "https://nkabom-prod.web.app",
+        "EMAIL_PROVIDER": "gmail",
       },
       "kv_namespaces": [
         { "binding": "PHOTOS", "id": "a65fc0d43e434c8397c1c6c5a1eaebcf" },

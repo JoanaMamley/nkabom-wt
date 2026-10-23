@@ -14,6 +14,7 @@ describe('renderEmail', () => {
       [
         'Hello Ama,',
         'Your registration has been approved. You can now log in to see the mentor directory and the rest of Nkabom.',
+        'So that our emails reach your inbox, please add the address this email came from to your contacts.',
         'Open Nkabom: https://nkabom.example/login',
         'Nkabom, the WomenTrust alumnae community',
       ].join('\n\n'),

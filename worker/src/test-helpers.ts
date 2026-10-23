@@ -8,6 +8,7 @@ export function stagingEnv(overrides: Partial<Env> = {}): Env {
   return {
     FIREBASE_PROJECT_ID: PROJECT_ID,
     ALLOWED_ORIGINS: 'https://nkabom-staging.web.app,https://nkabom-staging.firebaseapp.com',
+    APP_URL: 'https://nkabom-staging.web.app',
     PHOTOS: {} as KVNamespace,
     BACKUPS: {} as KVNamespace,
     ...overrides,
@@ -18,6 +19,7 @@ export function emulatorEnv(overrides: Partial<Env> = {}): Env {
   return stagingEnv({
     FIREBASE_PROJECT_ID: 'demo-nkabom',
     ALLOWED_ORIGINS: 'http://localhost:4200',
+    APP_URL: 'http://localhost:4200',
     FIRESTORE_EMULATOR_HOST: '127.0.0.1:8080',
     FIREBASE_AUTH_EMULATOR_HOST: '127.0.0.1:9099',
     ...overrides,

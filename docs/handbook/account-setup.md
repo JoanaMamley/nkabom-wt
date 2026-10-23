@@ -120,7 +120,7 @@ Later: the Worker, the server code in `worker/`, is put on Cloudflare with `wran
 That completes NKB-113. The rest of the set-up comes with the stories that need it, each following its README steps:
 
 - **NKB-114:** follow [Setting up the Worker](../../README.md#setting-up-the-worker) in the README: sign `wrangler` in, create the Workers KV namespaces for photos and backups, deploy staging (Hosting, Firestore rules and the Worker), set the Worker secrets for each environment (the service account key and the photo-link signing key), and check staging.
-- **NKB-116:** make the Gmail app password and set it as a Worker secret.
+- **NKB-116:** follow [Setting up Gmail](../../README.md#setting-up-gmail) in the README: make an app password for each environment and set it, with the account's address, as Worker secrets.
 - **NKB-118:** check the scheduled triggers run on staging.
 - **NKB-119:** test a backup restore, then record it in the README.
 

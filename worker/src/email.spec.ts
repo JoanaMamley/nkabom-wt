@@ -1,16 +1,8 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-const { error, info } = vi.hoisted(() => ({ error: vi.fn(), info: vi.fn() }));
-vi.mock('firebase-functions/logger', () => ({ error, info, warn: vi.fn() }));
-
 import { sendEmail } from './email';
-
-const env = {
-  EMAIL_PROVIDER: 'brevo',
-  EMAIL_FROM: 'no-reply@nkabom.example',
-  EMAIL_FROM_NAME: 'Nkabom',
-  BREVO_API_KEY: 'brevo-key',
-};
+import type { Env } from './env';
+import { stagingEnv } from './test-helpers';
 
 const ama = { email: 'ama@example.com', name: 'Ama Mensah' };
 const invite = {
@@ -19,24 +11,33 @@ const invite = {
   expiresInHours: 1,
 };
 
+function brevoEnv(overrides: Partial<Env> = {}): Env {
+  return stagingEnv({
+    EMAIL_PROVIDER: 'brevo',
+    EMAIL_FROM: 'no-reply@nkabom.example',
+    EMAIL_FROM_NAME: 'Nkabom',
+    BREVO_API_KEY: 'brevo-key',
+    ...overrides,
+  });
+}
+
 let fetch: ReturnType<typeof vi.fn>;
+let logError: ReturnType<typeof vi.spyOn>;
 
 beforeEach(() => {
-  Object.assign(process.env, env);
   fetch = vi.fn().mockResolvedValue(new Response('{"messageId":"1"}', { status: 201 }));
   vi.stubGlobal('fetch', fetch);
+  logError = vi.spyOn(console, 'error').mockImplementation(() => undefined);
 });
 
 afterEach(() => {
-  Object.keys(env).forEach((name) => delete process.env[name]);
   vi.unstubAllGlobals();
-  error.mockReset();
-  info.mockReset();
+  vi.restoreAllMocks();
 });
 
 describe('sendEmail', () => {
   it('renders the template and sends it from the configured sender', async () => {
-    await sendEmail(ama, 'registrationApproved', {
+    await sendEmail(brevoEnv(), ama, 'registrationApproved', {
       firstName: 'Ama',
       appUrl: 'https://nkabom.example',
     });
@@ -47,52 +48,63 @@ describe('sendEmail', () => {
     expect(body.subject).toBe('Welcome to Nkabom');
     expect(body.textContent).toContain('Hello Ama,');
     expect(body.tags).toEqual(['registrationApproved']);
-    expect(error).not.toHaveBeenCalled();
+    expect(logError).not.toHaveBeenCalled();
   });
 
   it('switches provider by configuration alone', async () => {
-    process.env.EMAIL_PROVIDER = 'log';
+    const log = vi.spyOn(console, 'log').mockImplementation(() => undefined);
 
-    await sendEmail(ama, 'adminInvite', invite);
+    await sendEmail(brevoEnv({ EMAIL_PROVIDER: 'log' }), ama, 'adminInvite', invite);
 
     expect(fetch).not.toHaveBeenCalled();
-    expect(info).toHaveBeenCalledWith(
+    expect(log).toHaveBeenCalledWith(
       'Email not sent (EMAIL_PROVIDER=log)',
       expect.objectContaining({ to: 'ama@example.com', subject: 'Set your password for Nkabom' }),
+    );
+  });
+
+  it('uses Gmail when no provider is set', async () => {
+    await expect(sendEmail(stagingEnv(), ama, 'adminInvite', invite)).rejects.toThrow(
+      'GMAIL_USER and GMAIL_APP_PASSWORD are not set',
+    );
+
+    expect(logError).toHaveBeenCalledWith(
+      'Email send failed',
+      expect.objectContaining({ provider: 'gmail' }),
     );
   });
 
   it('logs a failed send, without the message body, and rethrows', async () => {
     fetch.mockResolvedValue(new Response('{"message":"Key not found"}', { status: 401 }));
 
-    await expect(sendEmail(ama, 'adminInvite', invite)).rejects.toThrow('Brevo answered 401');
+    await expect(sendEmail(brevoEnv(), ama, 'adminInvite', invite)).rejects.toThrow(
+      'Brevo answered 401',
+    );
 
-    expect(error).toHaveBeenCalledWith('Email send failed', {
+    expect(logError).toHaveBeenCalledWith('Email send failed', {
       provider: 'brevo',
       template: 'adminInvite',
       to: 'ama@example.com',
       error: 'Brevo answered 401: {"message":"Key not found"}',
     });
-    expect(JSON.stringify(error.mock.calls)).not.toContain('code=secret');
+    expect(JSON.stringify(logError.mock.calls)).not.toContain('code=secret');
   });
 
   it('logs and rethrows an unknown provider', async () => {
-    process.env.EMAIL_PROVIDER = 'carrier-pigeon';
+    await expect(
+      sendEmail(brevoEnv({ EMAIL_PROVIDER: 'carrier-pigeon' }), ama, 'adminInvite', invite),
+    ).rejects.toThrow('Unknown EMAIL_PROVIDER "carrier-pigeon"');
 
-    await expect(sendEmail(ama, 'adminInvite', invite)).rejects.toThrow(
-      'Unknown EMAIL_PROVIDER "carrier-pigeon"',
-    );
-
-    expect(error).toHaveBeenCalledWith(
+    expect(logError).toHaveBeenCalledWith(
       'Email send failed',
       expect.objectContaining({ provider: 'carrier-pigeon', template: 'adminInvite' }),
     );
   });
 
   it('logs and rethrows a missing API key', async () => {
-    delete process.env.BREVO_API_KEY;
-
-    await expect(sendEmail(ama, 'adminInvite', invite)).rejects.toThrow('BREVO_API_KEY is not set');
-    expect(error).toHaveBeenCalledOnce();
+    await expect(
+      sendEmail(brevoEnv({ BREVO_API_KEY: undefined }), ama, 'adminInvite', invite),
+    ).rejects.toThrow('BREVO_API_KEY is not set');
+    expect(logError).toHaveBeenCalledOnce();
   });
 });
