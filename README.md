@@ -78,7 +78,7 @@ npm run lint && npm run format:check && npm run check:contrast && npm test -- --
 ## Configuration and secrets
 
 - `src/environments/environment.development.ts` points the app at the emulators.
-- `src/environments/environment.ts` and `environment.staging.ts` hold the production and staging Firebase web config. The web config identifies the project and is not a secret.
+- `src/environments/environment.ts` and `environment.staging.ts` hold the production and staging Firebase web config. The committed copies are empty: fill them in locally and keep them out of commits with `git update-index --skip-worktree src/environments/environment.ts src/environments/environment.staging.ts` (see [docs/handbook/account-setup.md](docs/handbook/account-setup.md)). Automated deploys will write them from GitHub secrets (NKB-121).
 - Server-side secrets (Cloudflare R2, email provider, Google service account) never go in this repo. `.env*`, `.secret.local`, key files and service account JSON are git-ignored.
 - `functions/.env.<project ID>` holds the non-secret Functions settings for that project: `demo-nkabom` for the emulators, `nkabom-staging` and `nkabom-prod` for the real projects. They are the only committed `.env` files; never put secrets in them.
 - Secrets are set per project with `firebase functions:secrets:set NAME --project staging` (or `production`) and kept in Google Cloud Secret Manager. A function only sees the secrets it lists in its options. Secret Manager is free for 6 secret versions per billing account, counting both projects, so keep each project to 3 secrets (`R2_CREDENTIALS`, `BREVO_API_KEY`, and the calendar key from NKB-501). Setting a secret again adds a version; after a deploy, `firebase functions:secrets:prune` destroys the versions no longer used.
@@ -91,23 +91,25 @@ npm run lint && npm run format:check && npm run check:contrast && npm test -- --
 | `staging`    | `nkabom-staging` | Trying changes against real services     |
 | `production` | `nkabom-prod`    | The live app                             |
 
-Both real projects belong to the shared project Google account (NKB-113) and are on the Blaze plan, which scheduled functions and Firestore exports need. Because the default alias is the demo project, a bare `firebase deploy` fails instead of reaching a real project: always name one.
+Both real projects belong to the shared project Google account (NKB-113). They stay on the free Spark plan, and server code moves from Cloud Functions to a Cloudflare Worker (NKB-114 to NKB-120), since the Blaze plan that Cloud Functions, scheduled functions and Firestore exports need could not be turned on without paying. Until NKB-120, the sections below still describe the Cloud Functions set-up. Because the default alias is the demo project, a bare `firebase deploy` fails instead of reaching a real project: always name one.
 
-Deploy by hand with `npm run deploy:staging` or `npm run deploy:production`. Each builds the app with that project's config and deploys Hosting, Cloud Functions, and Firestore rules and indexes together. Sign in first with `npx firebase login`, using the shared project account. Automated deploys come in NKB-114.
+Deploy by hand with `npm run deploy:staging` or `npm run deploy:production`. Each builds the app with that project's config and deploys Hosting, Cloud Functions, and Firestore rules and indexes together. Sign in first with `npx firebase login`, using the shared project account. Automated deploys come in NKB-121.
 
 Firebase Hosting serves only HTTPS (FR-8.2): it redirects plain HTTP and sends a `Strict-Transport-Security` header itself, so `firebase.json` does not set one.
 
 ### Setting up a project
 
-Once for each of `nkabom-staging` and `nkabom-prod`, signed in as the shared project account:
+Create the shared project accounts (Google and Cloudflare) first, following [docs/handbook/account-setup.md](docs/handbook/account-setup.md), which also walks through steps 1, 3 and 4 below in the consoles. How the accounts are protected and recovered is in [docs/handbook/accounts.md](docs/handbook/accounts.md).
+
+The projects stay on Spark, so skip the Blaze, budget and backup bucket steps (2, 7 and 8); the Worker set-up replaces steps 5 and 6 in NKB-114. Once for each of `nkabom-staging` and `nkabom-prod`, signed in as the shared project account:
 
 1. In the [Firebase console](https://console.firebase.google.com), create the project with exactly that ID. If the ID is taken, choose another and change it in `.firebaserc`, the `functions/.env.<project ID>` file name, its `BACKUP_BUCKET`, and `.gitignore`.
 2. Upgrade to the Blaze plan under **Usage and billing**.
-3. **Firestore Database > Create database** in production mode. The location cannot be changed later; use the same one for both projects and for the backup bucket.
-4. **Project settings > Your apps**: add a web app, then copy its config into `src/environments/environment.staging.ts` (staging) or `environment.ts` (production).
+3. **Firestore Database > Create database** in production mode. The location cannot be changed later; use the same one for both projects.
+4. **Project settings > Your apps**: add a web app, then copy its config into `src/environments/environment.staging.ts` (staging) or `environment.ts` (production), locally only (see [Configuration and secrets](#configuration-and-secrets)).
 5. Set the secrets for photos and email (see [Setting up a bucket](#setting-up-a-bucket) and [Setting up Brevo](#setting-up-brevo)), adding `--project staging` or `--project production`.
-6. Create the backup bucket (see [Backups](#backups)).
-7. Run `npm run deploy:staging` (or `deploy:production`). The first deploy asks for any setting missing from the `.env` file, such as `EMAIL_FROM`, and saves the answer there; commit it.
+6. Run `npm run deploy:staging` (or `deploy:production`). The first deploy asks for any setting missing from the `.env` file, such as `EMAIL_FROM`, and saves the answer there; commit it.
+7. Create the backup bucket: `scripts/create-backup-bucket.sh nkabom-staging` (or `nkabom-prod`; see [Backups](#backups)). It comes after the first deploy, which creates the service account the backup runs as.
 8. Set the budget and its cap: `scripts/create-budget.sh nkabom-staging 0.50` or `scripts/create-budget.sh nkabom-prod 1.50` (see [Costs](#costs)).
 
 ## Installable app (PWA)
@@ -143,6 +145,8 @@ Every page has a light and a dark mode (FR-8.8 to FR-8.10). On a first visit the
 
 ## Photo storage (Cloudflare R2)
 
+Being replaced: R2 needs a payment method on file, so NKB-115 moves photos to Workers KV, with links signed by the Worker. Do not set up the R2 buckets below.
+
 Photos live in a private R2 bucket. The browser never gets the bucket's keys: it calls a Cloud Function for a short-lived signed link and uploads or downloads with that.
 
 | Function              | Takes                   | Returns                                                      |
@@ -156,15 +160,19 @@ Without R2 settings the emulators still run, and both functions answer `failed-p
 
 ### Setting up a bucket
 
-Once per Firebase project (staging and production), in the executives' Cloudflare account:
+Once per Firebase project (staging and production), in the shared project Cloudflare account:
 
-1. **R2 > Create bucket**, for example `nkabom-photos`. Leave public access off (no r2.dev URL, no custom domain), so files open only through signed links.
+1. **R2 > Create bucket**: `nkabom-photos` for production, `nkabom-photos-staging` for staging (the `R2_BUCKET` in each `functions/.env.<project ID>`). Both live in one Cloudflare account, so the names must differ. Leave public access off (no r2.dev URL, no custom domain), so files open only through signed links.
 2. In the bucket's **Settings > CORS policy**, allow the app to upload and download:
 
    ```json
    [
      {
-       "AllowedOrigins": ["http://localhost:4200", "https://<app domain>"],
+       "AllowedOrigins": [
+         "http://localhost:4200",
+         "https://<project ID>.web.app",
+         "https://<project ID>.firebaseapp.com"
+       ],
        "AllowedMethods": ["GET", "PUT"],
        "AllowedHeaders": ["Content-Type"],
        "MaxAgeSeconds": 3600
@@ -180,7 +188,9 @@ Once per Firebase project (staging and production), in the executives' Cloudflar
      | firebase functions:secrets:set R2_CREDENTIALS --data-file=- --project staging
    ```
 
-   One secret instead of three keeps Secret Manager free (see [Configuration and secrets](#configuration-and-secrets)). The first deploy asks for `R2_BUCKET` (default `nkabom-photos`).
+   One secret instead of three keeps Secret Manager free (see [Configuration and secrets](#configuration-and-secrets)).
+
+Add a custom domain to `AllowedOrigins` if the app later gets one. Leave `localhost` out of the production bucket's list.
 
 To use a real bucket from the emulators, put the same JSON in `functions/.secret.local` (git-ignored), in single quotes: `R2_CREDENTIALS='{"accountId":"…",…}'`.
 
@@ -209,12 +219,15 @@ To switch provider, add a function for it in [functions/src/email-providers.ts](
 
 ### Setting up Brevo
 
-Brevo's free plan sends up to 300 emails a day. Once per Firebase project (staging and production):
+Not used: Brevo needs a domain the project does not have, so NKB-116 sends email through the shared Gmail account instead, and this section is replaced then.
 
-1. Create a Brevo account with the shared project Google account (NKB-113).
-2. **Senders, domains and dedicated IPs > Domains**: add the sending domain and add the DNS records Brevo shows (DKIM, DMARC, and the Brevo code), so mail is not marked as spam.
-3. **SMTP & API > API keys**: create a key, then run `firebase functions:secrets:set BREVO_API_KEY`.
-4. The first deploy asks for `EMAIL_FROM`, an address on that domain.
+Brevo's free plan sends up to 300 emails a day, shared by staging and production since both use one account.
+
+1. Once: create a Brevo account with the shared project Google account (NKB-113).
+2. Once: **Settings > Senders, domains, IPs > Domains**: add the sending domain and add the DNS records Brevo shows (DKIM, DMARC, and the Brevo code), so mail is not marked as spam.
+3. Once, after creating the API keys: [app.brevo.com/security/authorised_ips](https://app.brevo.com/security/authorised_ips) (**Settings > Security > Authorized IPs**) **> Deactivate blocking.** The server sends from changing addresses, so Brevo's IP blocking would otherwise start rejecting it once it stops learning new ones.
+4. Per project: **SMTP & API > API keys**: create a key named after the project (so one can be revoked without the other), then run `firebase functions:secrets:set BREVO_API_KEY --project staging` (or `production`).
+5. The first deploy asks for `EMAIL_FROM`, an address on that domain.
 
 ## Scheduled jobs
 
@@ -247,7 +260,7 @@ Until the daily job exists, the backup is its own job. After that, each project 
 
 ### Heartbeat
 
-`schedulerHeartbeat` runs every day at 06:00 and does nothing but succeed. It is temporary: it exists to check scheduled jobs on staging once (NKB-113), and is then removed so it does not take up a free Cloud Scheduler job.
+`schedulerHeartbeat` runs every day at 06:00 and does nothing but succeed. It is temporary: it was meant to check scheduled jobs on staging once. NKB-118 now does that check with the Worker's triggers, and NKB-120 removes the heartbeat.
 
 To check retries and error logs on staging:
 
@@ -275,22 +288,13 @@ Exports hold Firestore only. Photos are in R2 and Auth accounts in Firebase Auth
 
 ### Setting up the backup bucket
 
-Once per project, with the [gcloud CLI](https://cloud.google.com/sdk/docs/install) signed in as the shared project account. Set `PROJECT` to `nkabom-staging` or `nkabom-prod` and `LOCATION` to the Firestore location:
+Once per project, after its first deploy, with the [gcloud CLI](https://cloud.google.com/sdk/docs/install) signed in as the shared project account:
 
 ```sh
-gcloud storage buckets create gs://$PROJECT-backups --project=$PROJECT --location=$LOCATION \
-  --uniform-bucket-level-access --public-access-prevention
-gcloud storage buckets update gs://$PROJECT-backups --lifecycle-file=scripts/backup-lifecycle.json
-
-# The function runs as the default compute service account. Let it start exports and write them.
-NUMBER=$(gcloud projects describe $PROJECT --format='value(projectNumber)')
-gcloud projects add-iam-policy-binding $PROJECT \
-  --member=serviceAccount:$NUMBER-compute@developer.gserviceaccount.com \
-  --role=roles/datastore.importExportAdmin
-gcloud storage buckets add-iam-policy-binding gs://$PROJECT-backups \
-  --member=serviceAccount:$NUMBER-compute@developer.gserviceaccount.com \
-  --role=roles/storage.admin
+scripts/create-backup-bucket.sh nkabom-staging   # or nkabom-prod
 ```
+
+It creates `gs://<project ID>-backups`, private and in the Firestore database's location, applies [scripts/backup-lifecycle.json](scripts/backup-lifecycle.json) (delete after 30 days), and lets the default compute service account, which `backupFirestore` runs as, start exports and write them to the bucket. Running it again only updates the settings.
 
 To check it, run the job now from **Cloud Scheduler** in the Google Cloud console (**Force run** on `firebase-schedule-backupFirestore-us-central1`), then see that a new folder appears in the bucket.
 
