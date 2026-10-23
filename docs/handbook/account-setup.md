@@ -72,7 +72,14 @@ The app's sign-up arrives in NKB-201.
 1. Click the gear next to **Project Overview > Project settings**.
 2. **General**, at the bottom under **Your apps**, click the web icon (`</>`).
 3. **App nickname:** `Nkabom web`. Leave **Also set up Firebase Hosting** unticked; the repo already has the Hosting set-up.
-4. **Register app.** Copy the six values in `firebaseConfig` (`apiKey`, `authDomain`, `projectId`, `storageBucket`, `messagingSenderId`, `appId`) into `src/environments/environment.staging.ts`, or `environment.ts` for `nkabom-prod`. They are not secret. **Continue to console.**
+4. **Register app.** Copy the six values in `firebaseConfig` (`apiKey`, `authDomain`, `projectId`, `storageBucket`, `messagingSenderId`, `appId`) into `src/environments/environment.staging.ts`, or `environment.ts` for `nkabom-prod`. **Continue to console.**
+5. Keep the values out of the repo: the committed files stay empty, and your filled-in copies stay on your computer. Run this once in the repo, so git neither shows nor commits your changes to them:
+
+   ```sh
+   git update-index --skip-worktree src/environments/environment.ts src/environments/environment.staging.ts
+   ```
+
+   If the empty versions in the repo ever change, git refuses to update them until you run the same command with `--no-skip-worktree`, update, and then fill them in and skip them again.
 
 Note the **Project number** shown on the same page.
 
@@ -110,9 +117,9 @@ Later, not now: the Worker is the server code that NKB-115 adds to this repo. It
 
 ## Next
 
-The rest of NKB-113 needs the Worker stories first:
+That completes NKB-113. The rest of the set-up comes with the stories that need it, each following its README steps:
 
-- **NKB-115:** create the service account key (**Project settings > Service accounts > Generate new private key**), set the Worker secrets for each environment (the service account key and the photo-link signing key), create the Workers KV namespaces for photos and backups, and deploy staging: Hosting, Firestore rules and the Worker.
+- **NKB-115:** create the service account key (**Project settings > Service accounts > Generate new private key**), set the Worker secrets for each environment (the service account key and the photo-link signing key), create the Workers KV namespaces for photos and backups, and do the first deploy to staging: Hosting, Firestore rules and the Worker.
 - **NKB-117:** make the Gmail app password and set it as a Worker secret.
 - **NKB-119:** check the scheduled triggers run on staging.
 - **NKB-120:** test a backup restore, then record it in the README.

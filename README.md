@@ -78,7 +78,7 @@ npm run lint && npm run format:check && npm run check:contrast && npm test -- --
 ## Configuration and secrets
 
 - `src/environments/environment.development.ts` points the app at the emulators.
-- `src/environments/environment.ts` and `environment.staging.ts` hold the production and staging Firebase web config. The web config identifies the project and is not a secret.
+- `src/environments/environment.ts` and `environment.staging.ts` hold the production and staging Firebase web config. The committed copies are empty: fill them in locally and keep them out of commits with `git update-index --skip-worktree src/environments/environment.ts src/environments/environment.staging.ts` (see [docs/handbook/account-setup.md](docs/handbook/account-setup.md)). Automated deploys will write them from GitHub secrets (NKB-114).
 - Server-side secrets (Cloudflare R2, email provider, Google service account) never go in this repo. `.env*`, `.secret.local`, key files and service account JSON are git-ignored.
 - `functions/.env.<project ID>` holds the non-secret Functions settings for that project: `demo-nkabom` for the emulators, `nkabom-staging` and `nkabom-prod` for the real projects. They are the only committed `.env` files; never put secrets in them.
 - Secrets are set per project with `firebase functions:secrets:set NAME --project staging` (or `production`) and kept in Google Cloud Secret Manager. A function only sees the secrets it lists in its options. Secret Manager is free for 6 secret versions per billing account, counting both projects, so keep each project to 3 secrets (`R2_CREDENTIALS`, `BREVO_API_KEY`, and the calendar key from NKB-501). Setting a secret again adds a version; after a deploy, `firebase functions:secrets:prune` destroys the versions no longer used.
@@ -106,7 +106,7 @@ The projects stay on Spark, so skip the Blaze, budget and backup bucket steps (2
 1. In the [Firebase console](https://console.firebase.google.com), create the project with exactly that ID. If the ID is taken, choose another and change it in `.firebaserc`, the `functions/.env.<project ID>` file name, its `BACKUP_BUCKET`, and `.gitignore`.
 2. Upgrade to the Blaze plan under **Usage and billing**.
 3. **Firestore Database > Create database** in production mode. The location cannot be changed later; use the same one for both projects.
-4. **Project settings > Your apps**: add a web app, then copy its config into `src/environments/environment.staging.ts` (staging) or `environment.ts` (production).
+4. **Project settings > Your apps**: add a web app, then copy its config into `src/environments/environment.staging.ts` (staging) or `environment.ts` (production), locally only (see [Configuration and secrets](#configuration-and-secrets)).
 5. Set the secrets for photos and email (see [Setting up a bucket](#setting-up-a-bucket) and [Setting up Brevo](#setting-up-brevo)), adding `--project staging` or `--project production`.
 6. Run `npm run deploy:staging` (or `deploy:production`). The first deploy asks for any setting missing from the `.env` file, such as `EMAIL_FROM`, and saves the answer there; commit it.
 7. Create the backup bucket: `scripts/create-backup-bucket.sh nkabom-staging` (or `nkabom-prod`; see [Backups](#backups)). It comes after the first deploy, which creates the service account the backup runs as.
@@ -260,7 +260,7 @@ Until the daily job exists, the backup is its own job. After that, each project 
 
 ### Heartbeat
 
-`schedulerHeartbeat` runs every day at 06:00 and does nothing but succeed. It is temporary: it exists to check scheduled jobs on staging once (NKB-113), and is then removed so it does not take up a free Cloud Scheduler job.
+`schedulerHeartbeat` runs every day at 06:00 and does nothing but succeed. It is temporary: it was meant to check scheduled jobs on staging once. NKB-119 now does that check with the Worker's triggers, and NKB-121 removes the heartbeat.
 
 To check retries and error logs on staging:
 
