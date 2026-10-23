@@ -56,6 +56,30 @@ jobs:
       - run: npm test
       - run: npm run build
 
+  worker:
+    name: Worker
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    defaults:
+      run:
+        working-directory: worker
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: worker/package-lock.json
+      - run: npm ci
+      - run: npm run lint
+      - run: npm run format:check
+      - run: npm run typecheck
+      - run: npm test
+      # A dry run: bundles the Worker and checks wrangler.jsonc without deploying.
+      - run: npm run build
+
   rules:
     name: Firestore rules
     runs-on: ubuntu-latest
@@ -81,11 +105,12 @@ jobs:
   ci:
     name: CI
     if: always()
-    needs: [frontend, backend, rules]
+    needs: [frontend, backend, worker, rules]
     runs-on: ubuntu-latest
     steps:
       - name: Require every job to pass
         run: >-
           [ "${{ needs.frontend.result }}" = success ]
           && [ "${{ needs.backend.result }}" = success ]
+          && [ "${{ needs.worker.result }}" = success ]
           && [ "${{ needs.rules.result }}" = success ]

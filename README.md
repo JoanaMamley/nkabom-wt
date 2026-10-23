@@ -1,6 +1,6 @@
 # Nkabom app
 
-Angular PWA and Firebase backend (Cloud Functions, Firestore rules) for Nkabom, the WomenTrust alumnae community. One repo holds both. Requirements and backlog are in [docs/](docs/).
+Angular PWA, Firebase (Firestore rules, and Cloud Functions until NKB-120) and a Cloudflare Worker API for Nkabom, the WomenTrust alumnae community. One repo holds both. Requirements and backlog are in [docs/](docs/).
 
 ## Prerequisites
 
@@ -14,11 +14,12 @@ npm install
 npm start
 ```
 
-`npm start` runs the Firebase Emulator Suite (Auth, Firestore and Functions) and the Angular dev server together:
+`npm start` runs the Firebase Emulator Suite (Auth, Firestore and Functions), the Worker and the Angular dev server together:
 
 | Service     | URL                   |
 | ----------- | --------------------- |
 | App         | http://localhost:4200 |
+| Worker API  | http://127.0.0.1:8787 |
 | Emulator UI | http://127.0.0.1:4000 |
 | Auth        | http://127.0.0.1:9099 |
 | Functions   | http://127.0.0.1:5001 |
@@ -29,7 +30,8 @@ Local work uses the `demo-nkabom` project ID, so no Firebase login or credential
 ## Layout
 
 - `src/` Angular app
-- `functions/` Cloud Functions (TypeScript, its own `package.json`; `npm install` at the root installs both)
+- `functions/` Cloud Functions (TypeScript, its own `package.json`; `npm install` at the root installs it), removed in NKB-120
+- `worker/` the Cloudflare Worker, the app's API (TypeScript, its own `package.json`, also installed by `npm install` at the root)
 - `firestore.rules`, `firebase.json` Firebase config
 - `scripts/` one-off developer scripts, such as icon generation
 - `docs/` requirements and backlog
@@ -41,9 +43,12 @@ Local work uses the `demo-nkabom` project ID, so no Firebase login or credential
 | `npm start`                 | Emulators plus dev server                              |
 | `npm run serve`             | Dev server only                                        |
 | `npm run emulators`         | Builds functions, then runs emulators only             |
+| `npm run worker`            | Worker only, with `wrangler dev`                       |
 | `npm run build:functions`   | Compile Cloud Functions                                |
+| `npm run build:worker`      | Type-check the Worker and bundle it (dry run)          |
 | `npm test`                  | App unit tests (Vitest)                                |
 | `npm run test:functions`    | Cloud Functions tests (Vitest)                         |
+| `npm run test:worker`       | Worker tests (Vitest, in the Workers runtime)          |
 | `npm run test:rules`        | Firestore security rules tests (emulator)              |
 | `npm run lint`              | ESLint (TypeScript and templates)                      |
 | `npm run format`            | Format with Prettier                                   |
@@ -52,8 +57,10 @@ Local work uses the `demo-nkabom` project ID, so no Firebase login or credential
 | `npm run build:staging`     | Same build, with the staging Firebase config           |
 | `npm run deploy:staging`    | Staging build, then deploy everything to staging       |
 | `npm run deploy:production` | Production build, then deploy everything to production |
-| `npm run icons`             | Regenerate the app icons from `public/icons/icon.svg`  |
-| `npm run check:contrast`    | Check theme colours are readable in both modes         |
+
+"Everything" is Hosting, Firestore rules and indexes, and the Worker. Cloud Functions are left out, since they need the Blaze plan.
+| `npm run icons` | Regenerate the app icons from `public/icons/icon.svg` |
+| `npm run check:contrast` | Check theme colours are readable in both modes |
 
 ## Continuous integration
 
@@ -63,6 +70,7 @@ GitHub Actions runs [.github/workflows/ci.yml](.github/workflows/ci.yml) on ever
 | -------- | --------------------------------------------------------------------------------- |
 | Frontend | `ng lint`, Prettier check, theme contrast check, app unit tests, production build |
 | Backend  | functions lint, Prettier check, functions tests, build                            |
+| Worker   | Worker lint, Prettier check, type check, tests, and a dry-run build               |
 | Rules    | Firestore security rules tests against the emulator                               |
 | CI       | passes only if every job above passes                                             |
 
@@ -72,7 +80,8 @@ To run the same checks locally:
 
 ```sh
 npm run lint && npm run format:check && npm run check:contrast && npm test -- --watch=false && npm run build \
-  && npm run test:functions && npm run build:functions && npm run test:rules
+  && npm run test:functions && npm run build:functions && npm run test:worker && npm run build:worker \
+  && npm run test:rules
 ```
 
 ## Configuration and secrets
@@ -80,6 +89,7 @@ npm run lint && npm run format:check && npm run check:contrast && npm test -- --
 - `src/environments/environment.development.ts` points the app at the emulators.
 - `src/environments/environment.ts` and `environment.staging.ts` hold the production and staging Firebase web config. The committed copies are empty: fill them in locally and keep them out of commits with `git update-index --skip-worktree src/environments/environment.ts src/environments/environment.staging.ts` (see [docs/handbook/account-setup.md](docs/handbook/account-setup.md)). Automated deploys will write them from GitHub secrets (NKB-121).
 - Server-side secrets (Cloudflare R2, email provider, Google service account) never go in this repo. `.env*`, `.secret.local`, key files and service account JSON are git-ignored.
+- The Worker's settings are in [worker/wrangler.jsonc](worker/wrangler.jsonc), one block per environment, and its secrets are set with `wrangler secret put` (see [Worker](#worker)). They never go in the repo.
 - `functions/.env.<project ID>` holds the non-secret Functions settings for that project: `demo-nkabom` for the emulators, `nkabom-staging` and `nkabom-prod` for the real projects. They are the only committed `.env` files; never put secrets in them.
 - Secrets are set per project with `firebase functions:secrets:set NAME --project staging` (or `production`) and kept in Google Cloud Secret Manager. A function only sees the secrets it lists in its options. Secret Manager is free for 6 secret versions per billing account, counting both projects, so keep each project to 3 secrets (`R2_CREDENTIALS`, `BREVO_API_KEY`, and the calendar key from NKB-501). Setting a secret again adds a version; after a deploy, `firebase functions:secrets:prune` destroys the versions no longer used.
 
@@ -93,7 +103,7 @@ npm run lint && npm run format:check && npm run check:contrast && npm test -- --
 
 Both real projects belong to the shared project Google account (NKB-113). They stay on the free Spark plan, and server code moves from Cloud Functions to a Cloudflare Worker (NKB-114 to NKB-120), since the Blaze plan that Cloud Functions, scheduled functions and Firestore exports need could not be turned on without paying. Until NKB-120, the sections below still describe the Cloud Functions set-up. Because the default alias is the demo project, a bare `firebase deploy` fails instead of reaching a real project: always name one.
 
-Deploy by hand with `npm run deploy:staging` or `npm run deploy:production`. Each builds the app with that project's config and deploys Hosting, Cloud Functions, and Firestore rules and indexes together. Sign in first with `npx firebase login`, using the shared project account. Automated deploys come in NKB-121.
+Deploy by hand with `npm run deploy:staging` or `npm run deploy:production`. Each builds the app with that project's config and deploys Hosting, Firestore rules and indexes, and that environment's Worker together. Sign in first with `npx firebase login` and `npx wrangler login`, using the shared project accounts. Automated deploys come in NKB-121.
 
 Firebase Hosting serves only HTTPS (FR-8.2): it redirects plain HTTP and sends a `Strict-Transport-Security` header itself, so `firebase.json` does not set one.
 
@@ -101,7 +111,7 @@ Firebase Hosting serves only HTTPS (FR-8.2): it redirects plain HTTP and sends a
 
 Create the shared project accounts (Google and Cloudflare) first, following [docs/handbook/account-setup.md](docs/handbook/account-setup.md), which also walks through steps 1, 3 and 4 below in the consoles. How the accounts are protected and recovered is in [docs/handbook/accounts.md](docs/handbook/accounts.md).
 
-The projects stay on Spark, so skip the Blaze, budget and backup bucket steps (2, 7 and 8); the Worker set-up replaces steps 5 and 6 in NKB-114. Once for each of `nkabom-staging` and `nkabom-prod`, signed in as the shared project account:
+The projects stay on Spark, so skip the Blaze, budget and backup bucket steps (2, 7 and 8), and do [Setting up the Worker](#setting-up-the-worker) in place of steps 5 and 6. Once for each of `nkabom-staging` and `nkabom-prod`, signed in as the shared project account:
 
 1. In the [Firebase console](https://console.firebase.google.com), create the project with exactly that ID. If the ID is taken, choose another and change it in `.firebaserc`, the `functions/.env.<project ID>` file name, its `BACKUP_BUCKET`, and `.gitignore`.
 2. Upgrade to the Blaze plan under **Usage and billing**.
@@ -111,6 +121,118 @@ The projects stay on Spark, so skip the Blaze, budget and backup bucket steps (2
 6. Run `npm run deploy:staging` (or `deploy:production`). The first deploy asks for any setting missing from the `.env` file, such as `EMAIL_FROM`, and saves the answer there; commit it.
 7. Create the backup bucket: `scripts/create-backup-bucket.sh nkabom-staging` (or `nkabom-prod`; see [Backups](#backups)). It comes after the first deploy, which creates the service account the backup runs as.
 8. Set the budget and its cap: `scripts/create-budget.sh nkabom-staging 0.50` or `scripts/create-budget.sh nkabom-prod 1.50` (see [Costs](#costs)).
+
+## Worker
+
+The app's API is one Cloudflare Worker per environment, on the free plan at its `workers.dev` address, under the shared Cloudflare account's subdomain `nkabomwt-project`:
+
+| Environment | Worker               | Address                                                 |
+| ----------- | -------------------- | ------------------------------------------------------- |
+| Local       | `nkabom-api`         | http://127.0.0.1:8787                                   |
+| Staging     | `nkabom-api-staging` | https://nkabom-api-staging.nkabomwt-project.workers.dev |
+| Production  | `nkabom-api-prod`    | https://nkabom-api-prod.nkabomwt-project.workers.dev    |
+
+Writes with side effects (registration, profile edits, approvals, admin changes, mentorship, publishing, exports) go through it; the app reads Firestore directly. The code is in [worker/src/](worker/src/).
+
+Every endpoint except `/health` starts by checking the caller's Firebase ID token with `requireUser` from [worker/src/auth.ts](worker/src/auth.ts), so admin routes are enforced on the server, not only hidden in the app (FR-1.11). The token must be signed by Google, issued for that environment's project, unexpired, and name a user; otherwise the answer is `401`. The Worker then reaches Firestore through its REST API, as the project's service account, which bypasses the Firestore rules the way the Admin SDK does. For now it only reads (`getDocument`); the stories that move writes to the Worker add writes and Firebase Auth calls the same way.
+
+| Endpoint      | Needs sign-in | Returns                                                                      |
+| ------------- | ------------- | ---------------------------------------------------------------------------- |
+| `GET /health` | No            | `{ ok: true }`                                                               |
+| `GET /v1/me`  | Yes           | `{ uid, role }`: the caller's role from `users/{uid}`, or `null` without one |
+
+`/v1/me` is the test endpoint for this set-up. Send the token as `Authorization: Bearer <ID token>`. Errors come back as `{ error }` with the status; an unexpected failure is a `500` whose details go only to the Worker's log, as `Request failed`.
+
+**CORS:** only the origins in `ALLOWED_ORIGINS` (the app's `web.app` and `firebaseapp.com` addresses, and `localhost:4200` locally) get CORS headers, for `GET`, `POST`, `PUT` and `DELETE` with `Authorization` and `Content-Type`. Add a custom domain there if the app later gets one.
+
+**Adding an endpoint:** add a case to `route` in [worker/src/index.ts](worker/src/index.ts), call `requireUser` first, and throw `HttpError` for answers such as `400` or `403`. Firestore helpers are in [worker/src/firestore.ts](worker/src/firestore.ts).
+
+### Settings and secrets
+
+| Name                          | Kind    | Value                                                                              |
+| ----------------------------- | ------- | ---------------------------------------------------------------------------------- |
+| `FIREBASE_PROJECT_ID`         | setting | `nkabom-staging` or `nkabom-prod`; `demo-nkabom` locally                           |
+| `ALLOWED_ORIGINS`             | setting | Origins allowed by CORS, comma-separated                                           |
+| `FIRESTORE_EMULATOR_HOST`     | setting | Local only: the Firestore emulator                                                 |
+| `FIREBASE_AUTH_EMULATOR_HOST` | setting | Local only: the Auth emulator                                                      |
+| `PHOTOS`, `BACKUPS`           | KV      | The environment's Workers KV namespaces for photos (NKB-115) and backups (NKB-119) |
+| `GOOGLE_SERVICE_ACCOUNT`      | secret  | The project's Firebase service account key, the whole JSON file                    |
+| `PHOTO_LINK_KEY`              | secret  | A random key that signs photo links (NKB-115)                                      |
+
+Settings and KV namespace IDs are in [worker/wrangler.jsonc](worker/wrangler.jsonc). The staging and production blocks do not inherit the local ones, so the emulator settings never reach a deployed Worker, and the Worker also accepts emulator tokens only for a `demo-` project. Secrets are set per environment with `npx wrangler secret put NAME --env staging` (or `production`), run in `worker/`; each one is stored encrypted by Cloudflare and cannot be read back. Worker secrets are free.
+
+### Local development
+
+`npm start` (or `npm run worker` next to `npm run emulators`) runs the Worker with `wrangler dev` at http://127.0.0.1:8787, against the Auth and Firestore emulators, and with local KV kept in `worker/.wrangler/`. No Cloudflare sign-in or secrets are needed. The Auth emulator issues unsigned tokens, so locally the Worker instead checks that the token's user exists in the emulator.
+
+To try it by hand, make a user in the Auth emulator and call the API with its token:
+
+```sh
+TOKEN=$(curl -s 'http://127.0.0.1:9099/identitytoolkit.googleapis.com/v1/accounts:signUp?key=demo-api-key' \
+  -H 'Content-Type: application/json' \
+  -d '{"email":"ama@example.com","password":"secret123","returnSecureToken":true}' | jq -r .idToken)
+curl -s http://127.0.0.1:8787/v1/me -H "Authorization: Bearer $TOKEN"
+```
+
+The answer is `{"uid":"…","role":"member"}`: the Functions emulator's `createUserRecord` writes the `users` record for every new account (until NKB-117 moves that to the Worker). Without the header the answer is `401`.
+
+Tests run inside the Workers runtime with `@cloudflare/vitest-plugin` (`npm run test:worker`). They stand in for Google's keys, token exchange and Firestore, so they need no network or emulators.
+
+### Setting up the Worker
+
+Once, in `worker/`, signed in as the shared project accounts (see [docs/handbook/account-setup.md](docs/handbook/account-setup.md)):
+
+1. **Sign in to Cloudflare:** `npx wrangler login`, choose the shared Cloudflare account and click **Allow**. `npx wrangler whoami` then shows the shared account's address.
+2. **Create the KV namespaces,** two per environment:
+
+   ```sh
+   npx wrangler kv namespace create nkabom-photos-staging
+   npx wrangler kv namespace create nkabom-backups-staging
+   npx wrangler kv namespace create nkabom-photos-prod
+   npx wrangler kv namespace create nkabom-backups-prod
+   ```
+
+   If Wrangler offers to add each one to the config, say no. Put each printed `id` in place of the matching `REPLACE_WITH_…` in [worker/wrangler.jsonc](worker/wrangler.jsonc), and commit it: the IDs are not secret.
+
+3. **Deploy staging:** from the repo root, `npm run deploy:staging`. It deploys Hosting, the Firestore rules and indexes, and `nkabom-api-staging`. At the end Wrangler prints the Worker's address, which should match the [table above](#worker). The middle part is the account's `workers.dev` subdomain, `nkabomwt-project`; if it ever changes, update the table. For production, deploy only the Worker for now, so its secrets have somewhere to go: `npm --prefix worker run deploy:production`. Nobody calls it until the app does.
+4. **Set the service account key,** for each project. In the [Firebase console](https://console.firebase.google.com), open the project, then **Project settings > Service accounts > Generate new private key**. A JSON file downloads. In `worker/`:
+
+   ```sh
+   npx wrangler secret put GOOGLE_SERVICE_ACCOUNT --env staging < ~/Downloads/nkabom-staging-firebase-adminsdk-….json
+   ```
+
+   (`--env production` with the `nkabom-prod` key.) Then delete the file and empty the Bin: the secret is the only copy. If a key is lost or leaks, generate a new one, set it again, and delete the old key in the Google Cloud console under **IAM & Admin > Service accounts > firebase-adminsdk > Keys**.
+
+5. **Set the photo-link key,** a different random value per environment, never kept anywhere else:
+
+   ```sh
+   openssl rand -base64 32 | npx wrangler secret put PHOTO_LINK_KEY --env staging
+   openssl rand -base64 32 | npx wrangler secret put PHOTO_LINK_KEY --env production
+   ```
+
+   Changing it later only ends the photo links already handed out.
+
+6. **Check staging** (see below).
+
+`npx wrangler secret list --env staging` shows which secrets are set, without their values. Logs from a deployed Worker are on its **Logs** tab in the dashboard (**Workers & Pages > nkabom-api-staging**), kept for 3 days; `npx wrangler tail --env staging` follows them live.
+
+### Checking staging
+
+1. In the Firebase console for `nkabom-staging`: **Authentication > Sign-in method**, turn on **Email/Password** if it is off (members use it too, FR-1.1). Then **Authentication > Users > Add user** with a test address and password, and note its **User UID**.
+2. Get an ID token for it, using the `apiKey` from `src/environments/environment.staging.ts`:
+
+   ```sh
+   API=https://nkabom-api-staging.nkabomwt-project.workers.dev
+   TOKEN=$(curl -s "https://identitytoolkit.googleapis.com/v1/accounts:signInWithPassword?key=<apiKey>" \
+     -H 'Content-Type: application/json' \
+     -d '{"email":"<test address>","password":"<password>","returnSecureToken":true}' | jq -r .idToken)
+   ```
+
+3. `curl -s $API/v1/me` answers `401` `{"error":"Sign in required"}`.
+4. `curl -s $API/v1/me -H "Authorization: Bearer ${TOKEN%?}x"` (the token with its last character changed) answers `401` `{"error":"Invalid or expired sign-in"}`.
+5. `curl -s $API/v1/me -H "Authorization: Bearer $TOKEN"` answers `{"uid":"<User UID>","role":null}`: no `users` record yet, since nothing creates one on staging until NKB-117.
+6. In **Firestore Database**, add a document to `users` with the User UID as its ID and a string field `role` set to `member`. Call step 5 again: it answers `"role":"member"`, read from Firestore through the service account. Leave the user and document in place as data for the restore test (NKB-119).
+7. Open the staging app at `https://nkabom-staging.web.app` and check it loads.
 
 ## Installable app (PWA)
 
