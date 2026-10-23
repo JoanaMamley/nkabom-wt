@@ -13,7 +13,7 @@ This repo is shared, and anything committed stays in its history. Never put any 
 
 They are what someone needs to phish the right person or talk a support desk into recovering the account. They go in the **private accounts record**: one entry in the developer's password manager, outside the repo. It holds:
 
-- the sign-in address and password for Google, Cloudflare and Brevo;
+- the sign-in address and password for Google and Cloudflare;
 - each account's 2-step methods, and which devices they are on;
 - where the printed backup and recovery codes are kept, and who can reach them;
 - the recovery email and phone;
@@ -23,11 +23,10 @@ They are what someone needs to phish the right person or talk a support desk int
 
 | Account    | Signed in with                      | Owns                                                                                                                                |
 | ---------- | ----------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------- |
-| Google     | Its own Gmail address and password  | Firebase projects `nkabom-staging` and `nkabom-prod` (on the free Spark plan), their Google Cloud projects, and the service account the Worker acts as, which from NKB-501 also owns the birthday calendar |
+| Google     | Its own Gmail address and password  | Firebase projects `nkabom-staging` and `nkabom-prod` (on the free Spark plan), their Google Cloud projects, the service account the Worker acts as, which from NKB-501 also owns the birthday calendar, and the Gmail mailbox the app's email is sent from |
 | Cloudflare | The Gmail address, its own password | The Workers `nkabom-api-staging` and `nkabom-api-prod` and their secrets, and the Workers KV namespaces holding photos and backups |
-| Brevo      | The Gmail address, its own password | The sending domain and one API key per Firebase project                                                                             |
 
-Cloudflare and Brevo use the Gmail address, so whoever controls that mailbox can reset them. Each still has its own password and 2-step verification.
+Cloudflare uses the Gmail address, so whoever controls that mailbox can reset it. It still has its own password and 2-step verification.
 
 ## How it is protected
 
@@ -36,6 +35,7 @@ Cloudflare and Brevo use the Gmail address, so whoever controls that mailbox can
 - **Only the developer signs in.** Executives use the app as admins and do not need the account or the consoles.
 - **No card is on Google.** Both Firebase projects stay on the free Spark plan, which cannot be billed.
 - **No card is on Cloudflare either.** The Workers and Workers KV free plans need none, and past their daily limits requests fail until midnight UTC instead of being charged. R2 is not used, because it needs a payment method on file.
+- **Sending email** goes through the Gmail API with an authorisation (a refresh token) given once by the shared account. It exists only as a Worker secret. To cancel it, remove **Nkabom** under **Google Account > Security > Your connections to third-party apps & services**; changing the password also cancels it.
 - **The service account key** lets the Worker act on Firestore, Firebase Auth, push and the calendar with admin rights. It exists only as a Worker secret in each environment: never in the repo, a file or the private record. If it may have leaked, delete it in the Google Cloud console (**IAM & Admin > Service accounts**), create a new one and set it on the Worker again.
 
 When a backup code is used, update the private record. When fewer than 3 are left, sign in and print a new set (**Google Account > Security > Backup codes**), and destroy the old sheet.
@@ -52,4 +52,5 @@ When the account is handed over:
 
 1. The new owner changes every password and 2-step method, and sets up their own backup codes, recovery email and phone.
 2. They replace the service account key, as above, so no copy held by the previous developer still works.
-3. They start their own private accounts record.
+3. Changing the Google password cancels the Gmail sending authorisation, so they authorise it again (README, Email).
+4. They start their own private accounts record.

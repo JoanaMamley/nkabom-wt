@@ -1,6 +1,6 @@
 # Setting up the accounts
 
-Step-by-step set-up of the shared project accounts (NKB-113): the Google account, Firebase, Cloudflare and Brevo. Everything stays on free plans: the Firebase projects on Spark, with no card on Google, and Cloudflare Workers, R2 and Brevo on their free plans. As you go, add each account's details to the private accounts record in your password manager, never to the repo (see [accounts.md](accounts.md#keep-the-details-out-of-the-repo)). Once the accounts exist, the Worker, deploy and backup steps follow with NKB-115 to NKB-120 (see [Next](#next)).
+Step-by-step set-up of the shared project accounts (NKB-113): the Google account, Firebase, Cloudflare, and sending email from the Gmail account. Everything stays on free plans: the Firebase projects on Spark, with no card on Google, and Cloudflare Workers and Workers KV on their free plans. As you go, add each account's details to the private accounts record in your password manager, never to the repo (see [accounts.md](accounts.md#keep-the-details-out-of-the-repo)). Once the accounts exist, the Worker, deploy and backup steps follow with NKB-115 to NKB-120 (see [Next](#next)).
 
 The click paths below were checked in October 2026. These consoles change their menus often: if a label has moved, look for the same words nearby or use the console's search box.
 
@@ -9,10 +9,7 @@ The click paths below were checked in October 2026. These consoles change their 
 You need:
 
 - **A second sign-in device:** a security key, or a second phone or laptop for a passkey, so signing in does not depend on one phone.
-- **A domain you can add DNS records to,** for sending email through Brevo. Brevo cannot send reliably from a Gmail address: mail from `@gmail.com` sent through another service fails Gmail's authentication checks and is marked as spam or rejected.
 - **A computer with Node.js 24** and this repo, with `npm install` run.
-
-Keep a private note open while you work for the values you will need later: project numbers and the Brevo API keys. Delete it once each value is set as a Worker secret or stored in your password manager.
 
 ## 1. Google account
 
@@ -99,48 +96,24 @@ Do not add a payment method or turn on R2: Nkabom uses only the Workers free pla
 
 Add the Cloudflare password, 2-step method and recovery codes to the private accounts record.
 
-## 4. Brevo
+## 4. Sending email from Gmail
 
-### Create the account
+The app's email is sent from the shared account's Gmail address, through the Gmail API, so no domain or email service is needed. This part prepares the production project; the authorisation itself is done in NKB-117. In the browser profile signed in as the shared account:
 
-1. Go to [brevo.com](https://www.brevo.com) **> Sign up free**. Use the shared account's Gmail address and a new password, not **Sign up with Google**, for the same reason as Cloudflare.
-2. Confirm the email from the shared account's Gmail.
-3. Fill in the profile: name, **Company:** Nkabom (or WomenTrust alumnae), the website if there is one, and the address. Brevo uses these to check new senders, and in the footer of marketing emails (which Nkabom does not send).
-4. Choose the **Free** plan.
-5. Open **Transactional** in the top menu. If it says the transactional platform is not activated, ask Brevo support to activate it, explaining it sends account emails for a members' app. Brevo can take a day or two to check new accounts.
+### Turn on the Gmail API
 
-### Protect it
+1. Go to [console.cloud.google.com](https://console.cloud.google.com) and choose `nkabom-prod` in the project picker at the top.
+2. **APIs & Services > Library**, search for **Gmail API**, open it and click **Enable**. It is free and works on the Spark plan.
 
-1. Top right: your name **> Security** (or **My profile > Security**).
-2. **Two-factor authentication:** turn it on with the authenticator app, and save the backup codes with the others.
+### Set up the sign-in screen
 
-### Turn off IP blocking
+1. Open **Google Auth Platform** from the menu (in some layouts **APIs & Services > OAuth consent screen**) and click **Get started**.
+2. **App name:** `Nkabom`. **User support email:** the shared Gmail address. **Next.**
+3. **Audience: External.** **Next.**
+4. **Contact information:** the shared Gmail address. **Next**, agree to the policy, and **Create**.
+5. **Audience > Publish app > Confirm**, so the status shows **In production**. Do this before NKB-117 creates the authorisation: while the app is in **Testing**, Google cancels it after 7 days.
 
-Brevo can learn which addresses call its API and later block any new one. The Worker sends from addresses that change, so blocking would one day stop all email without warning.
-
-1. Your name **> Security > Authorized IPs.**
-2. Click **Deactivate blocking**, so API calls are allowed from any address. The API keys, kept only in the Worker's secrets, are what protects the account.
-
-### Authenticate the domain
-
-1. Your name **> Senders, domains & dedicated IPs > Domains > Add a domain.**
-2. Enter the sending domain, for example `nkabom.org`.
-3. Choose to authenticate it:
-   - **Automatically,** if Brevo recognises the domain's DNS provider: sign in to the provider when asked, and Brevo adds the records.
-   - **Manually** otherwise: Brevo lists records (a Brevo code TXT record, DKIM records, and a DMARC TXT record). In the DNS provider, add each with the exact name and value shown. In Cloudflare DNS, set each record to **DNS only** (grey cloud), not **Proxied**. If the domain already has a DMARC record, keep it rather than adding a second.
-4. Back in Brevo, **Authenticate this email domain** (or **Check configuration**). Records can take up to a day or two to show; check again later if they are not green yet.
-5. **Senders > Add a sender:** name `Nkabom`, email `no-reply@<domain>`. This is the Worker's `EMAIL_FROM` setting.
-
-### Create the API keys
-
-Once per environment, when you set up the Worker's secrets in NKB-115:
-
-1. Your name **> SMTP & API > API keys > Generate a new API key.**
-2. **Name:** `nkabom-staging` (or `nkabom-prod`), so one can be revoked without the other.
-3. Copy the key now; Brevo shows it only once.
-4. Set it straight away as the Worker's `BREVO_API_KEY` secret for that environment.
-
-Add the Brevo password, 2-step method and backup codes to the private accounts record. The API keys go only into the Worker's secrets.
+You do not need Google to verify the app. Only the shared account ever signs in to it, and it accepts the "Google hasn't verified this app" warning once, in NKB-117.
 
 ## 5. Tools
 
@@ -152,7 +125,8 @@ Add the Brevo password, 2-step method and backup codes to the private accounts r
 
 The rest of NKB-113 needs the Worker stories first:
 
-- **NKB-115:** create the service account key (**Project settings > Service accounts > Generate new private key**), set the Worker secrets for each environment (the service account key, `BREVO_API_KEY` and the photo-link signing key), create the Workers KV namespaces for photos and backups, and deploy staging: Hosting, Firestore rules and the Worker.
+- **NKB-115:** create the service account key (**Project settings > Service accounts > Generate new private key**), set the Worker secrets for each environment (the service account key and the photo-link signing key), create the Workers KV namespaces for photos and backups, and deploy staging: Hosting, Firestore rules and the Worker.
+- **NKB-117:** create the Gmail OAuth client, authorise sending once as the shared account, and set the result as a Worker secret.
 - **NKB-119:** check the scheduled triggers run on staging.
 - **NKB-120:** test a backup restore, then record it in the README.
 

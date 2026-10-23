@@ -99,7 +99,7 @@ Firebase Hosting serves only HTTPS (FR-8.2): it redirects plain HTTP and sends a
 
 ### Setting up a project
 
-Create the shared project accounts (Google, Cloudflare, Brevo) first, following [docs/handbook/account-setup.md](docs/handbook/account-setup.md), which also walks through steps 1, 3 and 4 below in the consoles. How the accounts are protected and recovered is in [docs/handbook/accounts.md](docs/handbook/accounts.md).
+Create the shared project accounts (Google and Cloudflare) first, following [docs/handbook/account-setup.md](docs/handbook/account-setup.md), which also walks through steps 1, 3 and 4 below in the consoles. How the accounts are protected and recovered is in [docs/handbook/accounts.md](docs/handbook/accounts.md).
 
 The projects stay on Spark, so skip the Blaze, budget and backup bucket steps (2, 7 and 8); the Worker set-up replaces steps 5 and 6 in NKB-115. Once for each of `nkabom-staging` and `nkabom-prod`, signed in as the shared project account:
 
@@ -219,11 +219,13 @@ To switch provider, add a function for it in [functions/src/email-providers.ts](
 
 ### Setting up Brevo
 
+Not used: Brevo needs a domain the project does not have, so NKB-117 sends email through the shared Gmail account instead, and this section is replaced then.
+
 Brevo's free plan sends up to 300 emails a day, shared by staging and production since both use one account.
 
 1. Once: create a Brevo account with the shared project Google account (NKB-113).
-2. Once: **Senders, domains and dedicated IPs > Domains**: add the sending domain and add the DNS records Brevo shows (DKIM, DMARC, and the Brevo code), so mail is not marked as spam.
-3. Once: **Security > Authorized IPs > Deactivate blocking.** The server sends from changing addresses, so Brevo's IP blocking would otherwise start rejecting it once it stops learning new ones.
+2. Once: **Settings > Senders, domains, IPs > Domains**: add the sending domain and add the DNS records Brevo shows (DKIM, DMARC, and the Brevo code), so mail is not marked as spam.
+3. Once, after creating the API keys: [app.brevo.com/security/authorised_ips](https://app.brevo.com/security/authorised_ips) (**Settings > Security > Authorized IPs**) **> Deactivate blocking.** The server sends from changing addresses, so Brevo's IP blocking would otherwise start rejecting it once it stops learning new ones.
 4. Per project: **SMTP & API > API keys**: create a key named after the project (so one can be revoked without the other), then run `firebase functions:secrets:set BREVO_API_KEY --project staging` (or `production`).
 5. The first deploy asks for `EMAIL_FROM`, an address on that domain.
 
