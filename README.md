@@ -78,7 +78,7 @@ npm run lint && npm run format:check && npm run check:contrast && npm test -- --
 ## Configuration and secrets
 
 - `src/environments/environment.development.ts` points the app at the emulators.
-- `src/environments/environment.ts` and `environment.staging.ts` hold the production and staging Firebase web config. The committed copies are empty: fill them in locally and keep them out of commits with `git update-index --skip-worktree src/environments/environment.ts src/environments/environment.staging.ts` (see [docs/handbook/account-setup.md](docs/handbook/account-setup.md)). Automated deploys will write them from GitHub secrets (NKB-114).
+- `src/environments/environment.ts` and `environment.staging.ts` hold the production and staging Firebase web config. The committed copies are empty: fill them in locally and keep them out of commits with `git update-index --skip-worktree src/environments/environment.ts src/environments/environment.staging.ts` (see [docs/handbook/account-setup.md](docs/handbook/account-setup.md)). Automated deploys will write them from GitHub secrets (NKB-121).
 - Server-side secrets (Cloudflare R2, email provider, Google service account) never go in this repo. `.env*`, `.secret.local`, key files and service account JSON are git-ignored.
 - `functions/.env.<project ID>` holds the non-secret Functions settings for that project: `demo-nkabom` for the emulators, `nkabom-staging` and `nkabom-prod` for the real projects. They are the only committed `.env` files; never put secrets in them.
 - Secrets are set per project with `firebase functions:secrets:set NAME --project staging` (or `production`) and kept in Google Cloud Secret Manager. A function only sees the secrets it lists in its options. Secret Manager is free for 6 secret versions per billing account, counting both projects, so keep each project to 3 secrets (`R2_CREDENTIALS`, `BREVO_API_KEY`, and the calendar key from NKB-501). Setting a secret again adds a version; after a deploy, `firebase functions:secrets:prune` destroys the versions no longer used.
@@ -91,9 +91,9 @@ npm run lint && npm run format:check && npm run check:contrast && npm test -- --
 | `staging`    | `nkabom-staging` | Trying changes against real services     |
 | `production` | `nkabom-prod`    | The live app                             |
 
-Both real projects belong to the shared project Google account (NKB-113). They stay on the free Spark plan, and server code moves from Cloud Functions to a Cloudflare Worker (NKB-115 to NKB-121), since the Blaze plan that Cloud Functions, scheduled functions and Firestore exports need could not be turned on without paying. Until NKB-121, the sections below still describe the Cloud Functions set-up. Because the default alias is the demo project, a bare `firebase deploy` fails instead of reaching a real project: always name one.
+Both real projects belong to the shared project Google account (NKB-113). They stay on the free Spark plan, and server code moves from Cloud Functions to a Cloudflare Worker (NKB-114 to NKB-120), since the Blaze plan that Cloud Functions, scheduled functions and Firestore exports need could not be turned on without paying. Until NKB-120, the sections below still describe the Cloud Functions set-up. Because the default alias is the demo project, a bare `firebase deploy` fails instead of reaching a real project: always name one.
 
-Deploy by hand with `npm run deploy:staging` or `npm run deploy:production`. Each builds the app with that project's config and deploys Hosting, Cloud Functions, and Firestore rules and indexes together. Sign in first with `npx firebase login`, using the shared project account. Automated deploys come in NKB-114.
+Deploy by hand with `npm run deploy:staging` or `npm run deploy:production`. Each builds the app with that project's config and deploys Hosting, Cloud Functions, and Firestore rules and indexes together. Sign in first with `npx firebase login`, using the shared project account. Automated deploys come in NKB-121.
 
 Firebase Hosting serves only HTTPS (FR-8.2): it redirects plain HTTP and sends a `Strict-Transport-Security` header itself, so `firebase.json` does not set one.
 
@@ -101,7 +101,7 @@ Firebase Hosting serves only HTTPS (FR-8.2): it redirects plain HTTP and sends a
 
 Create the shared project accounts (Google and Cloudflare) first, following [docs/handbook/account-setup.md](docs/handbook/account-setup.md), which also walks through steps 1, 3 and 4 below in the consoles. How the accounts are protected and recovered is in [docs/handbook/accounts.md](docs/handbook/accounts.md).
 
-The projects stay on Spark, so skip the Blaze, budget and backup bucket steps (2, 7 and 8); the Worker set-up replaces steps 5 and 6 in NKB-115. Once for each of `nkabom-staging` and `nkabom-prod`, signed in as the shared project account:
+The projects stay on Spark, so skip the Blaze, budget and backup bucket steps (2, 7 and 8); the Worker set-up replaces steps 5 and 6 in NKB-114. Once for each of `nkabom-staging` and `nkabom-prod`, signed in as the shared project account:
 
 1. In the [Firebase console](https://console.firebase.google.com), create the project with exactly that ID. If the ID is taken, choose another and change it in `.firebaserc`, the `functions/.env.<project ID>` file name, its `BACKUP_BUCKET`, and `.gitignore`.
 2. Upgrade to the Blaze plan under **Usage and billing**.
@@ -145,7 +145,7 @@ Every page has a light and a dark mode (FR-8.8 to FR-8.10). On a first visit the
 
 ## Photo storage (Cloudflare R2)
 
-Being replaced: R2 needs a payment method on file, so NKB-116 moves photos to Workers KV, with links signed by the Worker. Do not set up the R2 buckets below.
+Being replaced: R2 needs a payment method on file, so NKB-115 moves photos to Workers KV, with links signed by the Worker. Do not set up the R2 buckets below.
 
 Photos live in a private R2 bucket. The browser never gets the bucket's keys: it calls a Cloud Function for a short-lived signed link and uploads or downloads with that.
 
@@ -219,7 +219,7 @@ To switch provider, add a function for it in [functions/src/email-providers.ts](
 
 ### Setting up Brevo
 
-Not used: Brevo needs a domain the project does not have, so NKB-117 sends email through the shared Gmail account instead, and this section is replaced then.
+Not used: Brevo needs a domain the project does not have, so NKB-116 sends email through the shared Gmail account instead, and this section is replaced then.
 
 Brevo's free plan sends up to 300 emails a day, shared by staging and production since both use one account.
 
@@ -260,7 +260,7 @@ Until the daily job exists, the backup is its own job. After that, each project 
 
 ### Heartbeat
 
-`schedulerHeartbeat` runs every day at 06:00 and does nothing but succeed. It is temporary: it was meant to check scheduled jobs on staging once. NKB-119 now does that check with the Worker's triggers, and NKB-121 removes the heartbeat.
+`schedulerHeartbeat` runs every day at 06:00 and does nothing but succeed. It is temporary: it was meant to check scheduled jobs on staging once. NKB-118 now does that check with the Worker's triggers, and NKB-120 removes the heartbeat.
 
 To check retries and error logs on staging:
 

@@ -1,6 +1,6 @@
 # Setting up the accounts
 
-Step-by-step set-up of the shared project accounts (NKB-113): the Google account, Firebase, Cloudflare, and sending email from the Gmail account. Everything stays on free plans: the Firebase projects on Spark, with no card on Google, and Cloudflare Workers and Workers KV on their free plans. As you go, add each account's details to the private accounts record in your password manager, never to the repo (see [accounts.md](accounts.md#keep-the-details-out-of-the-repo)). Once the accounts exist, the Worker, deploy and backup steps follow with NKB-115 to NKB-120 (see [Next](#next)).
+Step-by-step set-up of the shared project accounts (NKB-113): the Google account, Firebase, Cloudflare, and sending email from the Gmail account. Everything stays on free plans: the Firebase projects on Spark, with no card on Google, and Cloudflare Workers and Workers KV on their free plans. As you go, add each account's details to the private accounts record in your password manager, never to the repo (see [accounts.md](accounts.md#keep-the-details-out-of-the-repo)). Once the accounts exist, the Worker, deploy and backup steps follow with NKB-114 to NKB-119 (see [Next](#next)).
 
 The click paths below were checked in October 2026. These consoles change their menus often: if a label has moved, look for the same words nearby or use the console's search box.
 
@@ -99,13 +99,13 @@ Note the **Project number** shown on the same page.
 
 ### Nothing else for now
 
-Do not add a payment method or turn on R2: Nkabom uses only the Workers free plan, with Workers KV for photos and backups, and neither needs a card. The Worker and its KV namespaces are created from the repo in NKB-115.
+Do not add a payment method or turn on R2: Nkabom uses only the Workers free plan, with Workers KV for photos and backups, and neither needs a card. The Worker and its KV namespaces are created from the repo in NKB-114.
 
 Add the Cloudflare password, 2-step method and recovery codes to the private accounts record.
 
 ## 4. Sending email from Gmail
 
-The app's email is sent from the shared account's Gmail address, through Gmail's mail server with an app password, so no domain or email service is needed. Nothing to set up now beyond 2-Step Verification, which section 1 turned on: app passwords only exist on accounts that have it. The app password itself is made in NKB-117 at [myaccount.google.com/apppasswords](https://myaccount.google.com/apppasswords) and set straight away as a Worker secret, so it is never kept anywhere else.
+The app's email is sent from the shared account's Gmail address, through Gmail's mail server with an app password, so no domain or email service is needed. Nothing to set up now beyond 2-Step Verification, which section 1 turned on: app passwords only exist on accounts that have it. The app password itself is made in NKB-116 at [myaccount.google.com/apppasswords](https://myaccount.google.com/apppasswords) and set straight away as a Worker secret, so it is never kept anywhere else.
 
 If you already turned on the Gmail API or started the Google Auth Platform sign-in screen in `nkabom-prod`, leave them as they are. The Gmail API is not used but costs nothing, and the sign-in screen is needed for Google login, which publishes it in NKB-204.
 
@@ -113,15 +113,15 @@ If you already turned on the Gmail API or started the Google Auth Platform sign-
 
 1. Sign the Firebase CLI in: `npx firebase login`, choosing the shared account. If it is already signed in as your own account, run `npx firebase login:add` and choose the shared account, then `npx firebase login:use <address>`.
 2. Check it: `npx firebase projects:list` shows `nkabom-staging` and `nkabom-prod`.
-Later, not now: the Worker is the server code that NKB-115 adds to this repo. It is put on Cloudflare with `wrangler`, Cloudflare's command-line tool, which NKB-115 also adds. Once that story is done, sign it in once with `npx wrangler login`: a browser opens, you sign in to the shared Cloudflare account, and click **Allow**. Running the command before then fails, because `wrangler` is not in the repo yet.
+Later, not now: the Worker is the server code that NKB-114 adds to this repo. It is put on Cloudflare with `wrangler`, Cloudflare's command-line tool, which NKB-114 also adds. Once that story is done, sign it in once with `npx wrangler login`: a browser opens, you sign in to the shared Cloudflare account, and click **Allow**. Running the command before then fails, because `wrangler` is not in the repo yet.
 
 ## Next
 
 That completes NKB-113. The rest of the set-up comes with the stories that need it, each following its README steps:
 
-- **NKB-115:** create the service account key (**Project settings > Service accounts > Generate new private key**), set the Worker secrets for each environment (the service account key and the photo-link signing key), create the Workers KV namespaces for photos and backups, and do the first deploy to staging: Hosting, Firestore rules and the Worker.
-- **NKB-117:** make the Gmail app password and set it as a Worker secret.
-- **NKB-119:** check the scheduled triggers run on staging.
-- **NKB-120:** test a backup restore, then record it in the README.
+- **NKB-114:** create the service account key (**Project settings > Service accounts > Generate new private key**), set the Worker secrets for each environment (the service account key and the photo-link signing key), create the Workers KV namespaces for photos and backups, and do the first deploy to staging: Hosting, Firestore rules and the Worker.
+- **NKB-116:** make the Gmail app password and set it as a Worker secret.
+- **NKB-118:** check the scheduled triggers run on staging.
+- **NKB-119:** test a backup restore, then record it in the README.
 
-For the restore test, staging needs some data first: add a few documents in the Firebase console under **Firestore**, or a test user under **Authentication > Users > Add user** once NKB-118 creates user records.
+For the restore test, staging needs some data first: add a few documents in the Firebase console under **Firestore**, or a test user under **Authentication > Users > Add user** once NKB-117 creates user records.
