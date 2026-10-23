@@ -17,7 +17,6 @@ They are what someone needs to phish the right person or talk a support desk int
 - each account's 2-step methods, and which devices they are on;
 - where the printed backup and recovery codes are kept, and who can reach them;
 - the recovery email and phone;
-- which payment method is on Cloudflare, and its expiry date;
 - how someone else reaches the record if the developer is unavailable.
 
 ## What the account owns
@@ -25,7 +24,7 @@ They are what someone needs to phish the right person or talk a support desk int
 | Account    | Signed in with                      | Owns                                                                                                                                |
 | ---------- | ----------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------- |
 | Google     | Its own Gmail address and password  | Firebase projects `nkabom-staging` and `nkabom-prod` (on the free Spark plan), their Google Cloud projects, and the service account the Worker acts as, which from NKB-501 also owns the birthday calendar |
-| Cloudflare | The Gmail address, its own password | The Workers `nkabom-api-staging` and `nkabom-api-prod` and their secrets, the R2 buckets for photos and backups, and their API tokens |
+| Cloudflare | The Gmail address, its own password | The Workers `nkabom-api-staging` and `nkabom-api-prod` and their secrets, and the Workers KV namespaces holding photos and backups |
 | Brevo      | The Gmail address, its own password | The sending domain and one API key per Firebase project                                                                             |
 
 Cloudflare and Brevo use the Gmail address, so whoever controls that mailbox can reset them. Each still has its own password and 2-step verification.
@@ -36,7 +35,7 @@ Cloudflare and Brevo use the Gmail address, so whoever controls that mailbox can
 - **Recovery** goes to a recovery email and phone that do not depend on the account itself.
 - **Only the developer signs in.** Executives use the app as admins and do not need the account or the consoles.
 - **No card is on Google.** Both Firebase projects stay on the free Spark plan, which cannot be billed.
-- **Cloudflare** has a payment method on file, because R2 needs one. It is charged only above R2's free allowance, which Nkabom stays far below. Workers' free plan never charges: past its daily limit, requests fail until midnight UTC.
+- **No card is on Cloudflare either.** The Workers and Workers KV free plans need none, and past their daily limits requests fail until midnight UTC instead of being charged. R2 is not used, because it needs a payment method on file.
 - **The service account key** lets the Worker act on Firestore, Firebase Auth, push and the calendar with admin rights. It exists only as a Worker secret in each environment: never in the repo, a file or the private record. If it may have leaked, delete it in the Google Cloud console (**IAM & Admin > Service accounts**), create a new one and set it on the Worker again.
 
 When a backup code is used, update the private record. When fewer than 3 are left, sign in and print a new set (**Google Account > Security > Backup codes**), and destroy the old sheet.
@@ -47,12 +46,10 @@ Once a year, and whenever the executives change:
 
 1. Sign in from a device that has not used the account before, using the second 2-step method rather than the usual one.
 2. In **Google Account > Security**, check the recovery email and phone are still right and still reach someone involved.
-3. Check Cloudflare's payment method under **Billing** has not expired or is close to it.
-4. Update the private accounts record with anything that changed.
+3. Update the private accounts record with anything that changed.
 
 When the account is handed over:
 
 1. The new owner changes every password and 2-step method, and sets up their own backup codes, recovery email and phone.
-2. They put their own payment method on Cloudflare and remove the old one.
-3. They replace the service account key, as above, so no copy held by the previous developer still works.
-4. They start their own private accounts record.
+2. They replace the service account key, as above, so no copy held by the previous developer still works.
+3. They start their own private accounts record.

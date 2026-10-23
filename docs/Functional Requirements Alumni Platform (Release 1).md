@@ -161,11 +161,11 @@ The constitution text is not yet in hand. These requirements cover how the platf
 - **Database:** Firestore, with full member records in an admin-only collection and a limited directory record that members can read (FR-3.1, FR-5.2), enforced by Firestore security rules with automated tests.
 
 * **Email:** Brevo's transactional email API, called from the Worker, with templates kept in one place in the codebase (FR-8.5). Its free plan allows 300 emails a day.
-* **Photo storage:** Cloudflare R2, a private bucket, with short-lived signed URLs issued by the Worker (FR-2.3, FR-8.2).
-* **Cost target:** $0 a month; this is a charity project. Firebase stays on the free Spark plan, which cannot be billed: Cloud Functions would need the Blaze plan, and Google asked for a prepayment to turn it on. Cloudflare Workers, R2 and Brevo are used within their free plans. R2 needs a payment method on file but charges nothing within its free allowance, and Workers' free plan rejects requests past its limits instead of charging.
+* **Photo storage:** Workers KV, private and read only through the Worker, with short-lived signed links issued by the Worker (FR-2.3, FR-8.2). Cloudflare R2 was dropped because it needs a payment method on file.
+* **Cost target:** $0 a month; this is a charity project. Firebase stays on the free Spark plan, which cannot be billed: Cloud Functions would need the Blaze plan, and Google asked for a prepayment to turn it on. Cloudflare Workers and Workers KV, and Brevo, are used within their free plans, which need no card; Workers and KV reject requests past their limits instead of charging.
 
-- **Development and backups:** the Firebase Emulator Suite and `wrangler dev` for local development and automated tests, and daily Firestore exports by the Worker to a private R2 bucket for backups (FR-8.6).
-- **Accounts:** a shared project Google account, created by the developer, owns the Firebase projects, the Google Cloud project for the birthday calendar, the Cloudflare account for R2 and Workers, and the Brevo account for email. Its access and recovery details are kept in a private record outside the repo, which the admin handbook points to (FR-8.7).
+- **Development and backups:** the Firebase Emulator Suite and `wrangler dev` for local development and automated tests, and daily Firestore exports by the Worker to a private Workers KV namespace for backups (FR-8.6).
+- **Accounts:** a shared project Google account, created by the developer, owns the Firebase projects, the Google Cloud project for the birthday calendar, the Cloudflare account for Workers and Workers KV, and the Brevo account for email. Its access and recovery details are kept in a private record outside the repo, which the admin handbook points to (FR-8.7).
 
 ## Deferred to later releases
 
@@ -186,5 +186,5 @@ The developer decides each of these.
 5. Google's Calendar API pricing page mentions possible charges for exceeding quotas later in 2026. Usage is far below any limit, but check the page before launch.
 6. How the constitution text affects this list. Once the text is in hand, read it against these requirements before building section 6, since it may define alumna eligibility, executive roles, or election rules that change FR-2.9, section 1, or the voting feature later.
 7. ~~Which email provider sends messages from Cloud Functions (FR-8.5).~~ Decided: Brevo, whose free plan allows 300 emails a day. The provider can be swapped by configuration (NKB-106).
-8. ~~Which payment card goes on the Firebase Blaze plan and the Cloudflare account.~~ Decided: no card on Google. Firebase stays on the free Spark plan and server code runs on Cloudflare Workers (NKB-115 to NKB-121). Cloudflare has a payment method on file for R2, which charges nothing within its free allowance (NKB-113).
+8. ~~Which payment card goes on the Firebase Blaze plan and the Cloudflare account.~~ Decided: no card on Google. Firebase stays on the free Spark plan and server code runs on Cloudflare Workers (NKB-115 to NKB-121). No card on Cloudflare either: photos and backups use Workers KV instead of R2, which needs a payment method on file (NKB-116, NKB-120).
 9. Which domain Brevo sends email from (FR-8.5). It must be one whose DNS records can be changed, since Brevo cannot send reliably from a Gmail address: for example an existing WomenTrust domain.

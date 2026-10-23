@@ -8,12 +8,11 @@ The click paths below were checked in October 2026. These consoles change their 
 
 You need:
 
-- **A payment method for Cloudflare:** a card or PayPal. R2 needs one on file, but charges nothing within its free allowance.
 - **A second sign-in device:** a security key, or a second phone or laptop for a passkey, so signing in does not depend on one phone.
 - **A domain you can add DNS records to,** for sending email through Brevo. Brevo cannot send reliably from a Gmail address: mail from `@gmail.com` sent through another service fails Gmail's authentication checks and is marked as spam or rejected.
 - **A computer with Node.js 24** and this repo, with `npm install` run.
 
-Keep a private note open while you work for the values you will need later: project numbers, the R2 account ID and keys, the Brevo API keys. Delete it once each value is set as a Worker secret or stored in your password manager.
+Keep a private note open while you work for the values you will need later: project numbers and the Brevo API keys. Delete it once each value is set as a Worker secret or stored in your password manager.
 
 ## 1. Google account
 
@@ -59,7 +58,7 @@ Do this twice: first `nkabom-staging`, then `nkabom-prod`. Sign in to [console.f
 2. **Edition:** Standard, the edition the app and its free allowance are planned around.
 3. **Database ID:** leave it as `(default)`.
 4. **Location:** pick one region and use the same for both projects. It cannot be changed later.
-   - `europe-west1` (Belgium) is the closest of Google's regions to Ghana, so pages load faster. Backups go to R2, so the region does not affect them.
+   - `europe-west1` (Belgium) is the closest of Google's regions to Ghana, so pages load faster. Backups go to Workers KV, so the region does not affect them.
    - Any region has the same free allowance.
 5. **Start in production mode.** The deploy replaces these rules with `firestore.rules`.
 6. **Create.**
@@ -94,44 +93,11 @@ Note the **Project number** shown on the same page.
 2. **Two-factor authentication > Mobile App Authentication**: scan the QR code with the authenticator app and enter the code.
 3. Save the recovery codes Cloudflare shows with the Google backup codes.
 
-### Add a payment method
+### Nothing else for now
 
-1. **Manage Account > Billing > Payment info** (or **Billing** in the left menu).
-2. Add a card or PayPal. Cloudflare charges only above R2's free allowance.
+Do not add a payment method or turn on R2: Nkabom uses only the Workers free plan, with Workers KV for photos and backups, and neither needs a card. The Worker and its KV namespaces are created from the repo in NKB-115.
 
-Add which payment method Cloudflare uses to the private accounts record.
-
-### Turn on R2
-
-1. Left menu: **Storage & databases > R2 > Overview** (in some layouts **R2 Object Storage**).
-2. Follow **Purchase R2** (or **Add R2 subscription**) through checkout. The plan is free up to 10 GB and the free operation counts; you are charged only above them.
-
-### Create the buckets
-
-Twice: `nkabom-photos-staging`, then `nkabom-photos`.
-
-1. **R2 > Overview > Create bucket.**
-2. **Bucket name:** `nkabom-photos-staging` (or `nkabom-photos`).
-3. **Location:** **Provide a location hint > Western Europe (WEUR)**, the closest to Ghana. Leave the jurisdiction as none.
-4. **Default storage class: Standard.** Infrequent Access is outside the free allowance and charges to read files back.
-5. **Create bucket.**
-6. In the bucket, open **Settings**. Under **Public access**, check **Public Development URL** stays **Disabled** and there is no custom domain.
-7. **Settings > CORS Policy > Add CORS policy** (or **Edit**), paste the policy from the README, *Setting up a bucket*, with this project's addresses, and **Save**. For `nkabom-photos`, leave out `http://localhost:4200`.
-
-### Create the API keys
-
-Once for each photos bucket, when you set up the Worker's secrets in NKB-115, so the keys go straight into the Worker and are never kept anywhere else:
-
-1. **R2 > Overview.** Under **Account Details**, click **Manage** next to **API Tokens**. Note the **Account ID** shown there.
-2. **Create Account API token.** An account token keeps working when the account changes hands; a user token stops when its user is removed.
-3. **Token name:** `nkabom-staging photos` (or `nkabom-prod photos`).
-4. **Permissions: Object Read & Write.**
-5. **Specify bucket(s): Apply to specific buckets only**, and choose that one bucket.
-6. **TTL: Forever.** Leave **Client IP Address Filtering** empty, since the Worker has no fixed address.
-7. **Create Account API Token.** Copy the **Access Key ID** and **Secret Access Key** now; the secret is never shown again.
-8. Set them straight away as the Worker's `R2_CREDENTIALS` secret for that environment (NKB-115 adds the command).
-
-Add the Cloudflare password, 2-step method and recovery codes to the private accounts record. The R2 keys go only into the Worker's secrets.
+Add the Cloudflare password, 2-step method and recovery codes to the private accounts record.
 
 ## 4. Brevo
 
@@ -186,8 +152,8 @@ Add the Brevo password, 2-step method and backup codes to the private accounts r
 
 The rest of NKB-113 needs the Worker stories first:
 
-- **NKB-115:** create the service account key (**Project settings > Service accounts > Generate new private key**), set the Worker secrets for each environment (the key, `R2_CREDENTIALS` and `BREVO_API_KEY`), and deploy staging: Hosting, Firestore rules and the Worker.
+- **NKB-115:** create the service account key (**Project settings > Service accounts > Generate new private key**), set the Worker secrets for each environment (the service account key, `BREVO_API_KEY` and the photo-link signing key), create the Workers KV namespaces for photos and backups, and deploy staging: Hosting, Firestore rules and the Worker.
 - **NKB-119:** check the scheduled triggers run on staging.
-- **NKB-120:** create the R2 backups buckets and test a restore, then record it in the README.
+- **NKB-120:** test a backup restore, then record it in the README.
 
 For the restore test, staging needs some data first: add a few documents in the Firebase console under **Firestore**, or a test user under **Authentication > Users > Add user** once NKB-118 creates user records.

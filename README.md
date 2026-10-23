@@ -145,6 +145,8 @@ Every page has a light and a dark mode (FR-8.8 to FR-8.10). On a first visit the
 
 ## Photo storage (Cloudflare R2)
 
+Being replaced: R2 needs a payment method on file, so NKB-116 moves photos to Workers KV, with links signed by the Worker. Do not set up the R2 buckets below.
+
 Photos live in a private R2 bucket. The browser never gets the bucket's keys: it calls a Cloud Function for a short-lived signed link and uploads or downloads with that.
 
 | Function              | Takes                   | Returns                                                      |
