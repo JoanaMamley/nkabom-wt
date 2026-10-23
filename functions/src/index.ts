@@ -9,9 +9,7 @@ initializeApp();
 export { backupFirestore } from './backups';
 export { schedulerHeartbeat } from './scheduled';
 export { enforceBudget } from './costs';
-export { syncDirectoryEntry } from './directory';
 export { getPhotoDownloadUrl, getPhotoUploadUrl } from './photos';
-export { createUserRecord } from './users';
 
 // Placeholder so the Functions emulator has something to load.
 // Replaced by real functions starting with NKB-104 (audit log) and NKB-208 (roles).

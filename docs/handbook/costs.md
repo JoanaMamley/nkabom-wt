@@ -25,7 +25,7 @@ Budgets are made with `scripts/create-budget.sh` (see the README, Setting up a p
 The project drops back to the free Spark plan:
 
 - The app's pages still load from Firebase Hosting, and Firestore keeps its data.
-- Cloud Functions stop. New sign-ups get no user record, photos cannot be uploaded or viewed, no email is sent, the directory stops updating, and scheduled jobs, including the nightly backup, do not run.
+- Cloud Functions stop, so scheduled jobs, including the nightly backup, do not run. Sign-ups, profiles, the directory, photos and email are on the Worker and keep working.
 - Google warns that it can delete resources in a project that stays without billing. Turn billing back on within days, not weeks.
 
 ## When an alert email arrives

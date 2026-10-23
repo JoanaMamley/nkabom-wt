@@ -3,25 +3,30 @@ import { base64url } from 'jose';
 import type { User } from './auth';
 import type { Env } from './env';
 import { HttpError, json, readJson } from './http';
+import { MAX_PHOTO_BYTES, PHOTO_TYPES, type PhotoType } from './model';
 
 // Member photos in the private PHOTOS Workers KV namespace (FR-2.3, FR-8.2). Nothing reads KV
 // directly: the browser asks for a short-lived link signed by the Worker, then uploads or
 // downloads through the Worker with it.
 
-export const PHOTO_TYPES = {
-  'image/jpeg': 'jpg',
-  'image/png': 'png',
-  'image/webp': 'webp',
-} as const;
-export type PhotoType = keyof typeof PHOTO_TYPES;
-export const MAX_PHOTO_BYTES = 5 * 1024 * 1024;
-
 export const UPLOAD_URL_SECONDS = 5 * 60;
 export const DOWNLOAD_URL_SECONDS = 10 * 60;
 
-// photos/{uid}/{uuid}.{ext}, also the KV key. firestore.rules checks a profile's photoPath against
-// the same shape.
+// photos/{uid}/{uuid}.{ext}, also the KV key.
 const PHOTO_PATH = /^photos\/([A-Za-z0-9]+)\/[0-9a-f-]{36}\.(jpg|png|webp)$/;
+
+/** The user ID whose folder a photo path is in, or null if it is not a photo path. */
+export function photoOwner(path: unknown): string | null {
+  return typeof path === 'string' ? (PHOTO_PATH.exec(path)?.[1] ?? null) : null;
+}
+
+/** Whether a photo has been uploaded to this path. */
+export async function photoExists(env: Env, path: string): Promise<boolean> {
+  // A stream, cancelled at once, so the photo itself is not read.
+  const photo = await env.PHOTOS.get(path, 'stream');
+  await photo?.cancel();
+  return photo !== null;
+}
 
 /**
  * POST /v1/photos/upload-url with { contentType, size }: a 5-minute link for uploading the
@@ -52,7 +57,7 @@ export async function getPhotoDownloadUrl(
 ): Promise<Response> {
   const { path } = await readJson(request);
 
-  const owner = typeof path === 'string' ? PHOTO_PATH.exec(path)?.[1] : undefined;
+  const owner = photoOwner(path);
   if (!owner) {
     throw new HttpError(400, 'Not a photo path');
   }

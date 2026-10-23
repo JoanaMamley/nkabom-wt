@@ -20,15 +20,7 @@ import {
 } from 'firebase/firestore';
 import { afterAll, beforeAll, beforeEach, describe, it } from 'vitest';
 
-import {
-  AUDIT_LOG,
-  DIRECTORY,
-  MAX_YEARS_TO_GRADUATION,
-  MEMBERS,
-  MIN_GRADUATION_YEAR,
-  STAGES,
-  USERS,
-} from '../functions/src/model';
+import { AUDIT_LOG, DIRECTORY, MEMBERS, USERS } from '../worker/src/model';
 
 // Runs against the Firestore emulator: npm run test:rules starts it for the test run.
 let env: RulesTestEnvironment;
@@ -99,104 +91,40 @@ describe('users', () => {
 });
 
 describe('members', () => {
-  it('lets a user create their own pending profile and read it back', async () => {
-    const profile = doc(as('ama'), MEMBERS, 'ama');
+  beforeEach(() => seed(`${MEMBERS}/ama`, { ...newProfile(), createdAt: Timestamp.now() }));
 
-    await assertSucceeds(setDoc(profile, newProfile()));
-    await assertSucceeds(getDoc(profile));
+  it('lets a member read their own profile', async () => {
+    await assertSucceeds(getDoc(doc(as('ama'), MEMBERS, 'ama')));
   });
 
-  it('accepts both stages', async () => {
-    for (const [i, stage] of STAGES.entries()) {
-      await assertSucceeds(
-        setDoc(doc(as(`user${i}`), MEMBERS, `user${i}`), newProfile({ stage }, `user${i}`)),
-      );
-    }
+  // Registration and edits go through the Worker (NKB-117), which checks every field.
+  it('never lets a member create a profile directly, even a valid pending one', async () => {
+    await assertFails(setDoc(doc(as('kofi'), MEMBERS, 'kofi'), newProfile({}, 'kofi')));
   });
 
-  it('allows only one profile per user', async () => {
+  it('never lets a member change or delete their profile directly', async () => {
     const profile = doc(as('ama'), MEMBERS, 'ama');
-    await setDoc(profile, newProfile());
 
-    await assertFails(setDoc(profile, newProfile({ surname: 'Owusu' })));
     await assertFails(updateDoc(profile, { surname: 'Owusu' }));
+    await assertFails(updateDoc(profile, { status: 'active' }));
+    await assertFails(setDoc(profile, newProfile({ surname: 'Owusu' })));
     await assertFails(deleteDoc(profile));
   });
 
-  it("refuses a profile under another user's ID", async () => {
-    await assertFails(setDoc(doc(as('kofi'), MEMBERS, 'ama'), newProfile()));
+  it("never lets a member write another member's profile", async () => {
+    await assertFails(setDoc(doc(as('kofi'), MEMBERS, 'esi'), newProfile({}, 'esi')));
+    await assertFails(updateDoc(doc(as('kofi'), MEMBERS, 'ama'), { surname: 'Owusu' }));
   });
 
-  it('refuses a profile when logged out', async () => {
+  it('is closed when logged out', async () => {
     const db = env.unauthenticatedContext().firestore();
-    await assertFails(setDoc(doc(db, MEMBERS, 'ama'), newProfile()));
+    await assertFails(getDoc(doc(db, MEMBERS, 'ama')));
+    await assertFails(setDoc(doc(db, MEMBERS, 'kofi'), newProfile({}, 'kofi')));
   });
 
   it("hides other members' profiles and the list", async () => {
-    await seed(`${MEMBERS}/ama`, { ...newProfile(), createdAt: Timestamp.now() });
-
     await assertFails(getDoc(doc(as('kofi'), MEMBERS, 'ama')));
     await assertFails(getDocs(collection(as('ama'), MEMBERS)));
-  });
-
-  it('refuses any status but pending, so members cannot approve themselves', async () => {
-    for (const status of ['active', 'rejected', 'deactivated']) {
-      await assertFails(setDoc(doc(as('ama'), MEMBERS, 'ama'), newProfile({ status })));
-    }
-  });
-
-  it('refuses missing and extra fields', async () => {
-    const withoutPhoto: Record<string, unknown> = newProfile();
-    delete withoutPhoto['photoPath'];
-
-    await assertFails(setDoc(doc(as('ama'), MEMBERS, 'ama'), withoutPhoto));
-    await assertFails(setDoc(doc(as('ama'), MEMBERS, 'ama'), newProfile({ role: 'admin' })));
-  });
-
-  it.each([
-    ['a blank first name', { firstNames: '  ' }],
-    ['a surname over 100 characters', { surname: 'a'.repeat(101) }],
-    ['a date of birth in another format', { dateOfBirth: '29/02/1998' }],
-    ['month 13', { dateOfBirth: '1998-13-01' }],
-    ['day 32', { dateOfBirth: '1998-01-32' }],
-    ['an unknown stage', { stage: 'retired' }],
-    ['a blank course or occupation', { courseOrOccupation: '' }],
-    ['a graduation year before the range', { graduationYear: MIN_GRADUATION_YEAR - 1 }],
-    [
-      'a graduation year after the range',
-      { graduationYear: new Date().getFullYear() + MAX_YEARS_TO_GRADUATION + 1 },
-    ],
-    ['a fractional graduation year', { graduationYear: 2020.5 }],
-    ['a graduation year as text', { graduationYear: '2020' }],
-    ['a blank photo path', { photoPath: '' }],
-    ["another member's photo", { photoPath: photoOf('kofi') }],
-    ['a photo name not issued by the upload function', { photoPath: 'photos/ama/profile.webp' }],
-    ['a photo path with a prefix', { photoPath: `x/${photoOf('ama')}` }],
-    ['a photo of another type', { photoPath: photoOf('ama').replace('.webp', '.svg') }],
-    ['a photo URL', { photoPath: `https://example.com/${photoOf('ama')}` }],
-    ['a creation time set by the client', { createdAt: Timestamp.fromDate(new Date(2020, 0, 1)) }],
-    ['an update time set by the client', { updatedAt: Timestamp.fromDate(new Date(2020, 0, 1)) }],
-  ])('refuses %s', async (_case, overrides) => {
-    await assertFails(setDoc(doc(as('ama'), MEMBERS, 'ama'), newProfile(overrides)));
-  });
-
-  it('accepts each photo type', async () => {
-    for (const [i, ext] of ['jpg', 'png', 'webp'].entries()) {
-      const uid = `user${i}`;
-      const photoPath = photoOf(uid).replace('.webp', `.${ext}`);
-      await assertSucceeds(setDoc(doc(as(uid), MEMBERS, uid), newProfile({ photoPath }, uid)));
-    }
-  });
-
-  it('accepts the ends of the graduation year range', async () => {
-    const last = new Date().getFullYear() + MAX_YEARS_TO_GRADUATION;
-
-    await assertSucceeds(
-      setDoc(doc(as('ama'), MEMBERS, 'ama'), newProfile({ graduationYear: MIN_GRADUATION_YEAR })),
-    );
-    await assertSucceeds(
-      setDoc(doc(as('kofi'), MEMBERS, 'kofi'), newProfile({ graduationYear: last }, 'kofi')),
-    );
   });
 });
 
@@ -211,7 +139,7 @@ describe('directory', () => {
     };
   }
 
-  // Ama and Kofi are active, so the sync function has listed them. Esi is pending: she has a
+  // Ama and Kofi are active, so the Worker has listed them. Esi is pending: she has a
   // profile but no directory entry.
   beforeEach(async () => {
     await seed(`${DIRECTORY}/ama`, entry('Ama'));
