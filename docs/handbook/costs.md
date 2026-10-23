@@ -61,6 +61,7 @@ Once a month, look at each service's usage against its free allowance. The allow
 | Artifact Registry (function images) | Google Cloud console > Artifact Registry            | 0.5 GB                                                                        |
 | Hosting                             | Firebase console > Hosting > **Usage**              | 10 GB stored, 360 MB a day transferred                                        |
 | Cloudflare R2 (photos)              | Cloudflare dashboard > R2 > **Metrics**             | 10 GB stored, 1 million uploads (class A), 10 million downloads (class B)     |
+| Cloudflare Queues (scheduled jobs)  | Cloudflare dashboard > Queues > `nkabom-jobs-…` > **Metrics** | 10,000 operations a day for the whole account; each task run uses about 3 |
 
 Cloudflare R2 is billed by Cloudflare, not Google, so the budget above does not cover it. If R2 nears its free allowance, look at photo sizes (they should be resized before upload) before paying.
 

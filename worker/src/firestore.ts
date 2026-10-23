@@ -31,6 +31,29 @@ export async function getDocument(env: Env, path: string): Promise<Fields | null
   return decodeFields(document.fields ?? {});
 }
 
+/** The documents in a collection whose field equals value, keyed by document ID. */
+export async function findDocuments(
+  env: Env,
+  collection: string,
+  field: string,
+  value: unknown,
+): Promise<Map<string, Fields>> {
+  const results = (await post(env, 'runQuery', `query of ${collection}`, {
+    structuredQuery: {
+      from: [{ collectionId: collection }],
+      where: {
+        fieldFilter: { field: { fieldPath: field }, op: 'EQUAL', value: encodeValue(value) },
+      },
+    },
+  })) as { document?: { name: string; fields?: Record<string, FirestoreValue> } }[];
+  // Results without a document only report progress.
+  return new Map(
+    results.flatMap(({ document }) =>
+      document ? [[document.name.split('/').pop()!, decodeFields(document.fields ?? {})]] : [],
+    ),
+  );
+}
+
 type Write =
   { op: 'create' | 'set' | 'update'; path: string; data: Fields } | { op: 'delete'; path: string };
 

@@ -6,6 +6,7 @@ export const USERS = 'users';
 export const MEMBERS = 'members';
 export const DIRECTORY = 'directory';
 export const AUDIT_LOG = 'auditLog';
+export const JOB_STATUS = 'jobStatus';
 
 // FR-1.5: a Primary Admin is an admin who can also manage admin accounts.
 export const ROLES = ['member', 'admin', 'primaryAdmin'] as const;
@@ -117,4 +118,29 @@ export interface AuditEntry {
   target: AuditTarget | null;
   details: AuditDetails | null;
   at: Date;
+}
+
+export const JOB_OUTCOMES = ['succeeded', 'retrying', 'failed'] as const;
+export type JobOutcome = (typeof JOB_OUTCOMES)[number];
+
+/**
+ * jobStatus/{schedule}-{task}: how a scheduled task's last run went (NKB-118), kept here because
+ * Worker logs last only 3 days. Only the Worker writes it.
+ */
+export interface JobStatus {
+  schedule: string;
+  task: string;
+  /** retrying while attempts remain, failed once they have all failed. */
+  status: JobOutcome;
+  /** When the trigger fired for this run. */
+  scheduledTime: Date;
+  finishedAt: Date;
+  /** 1 for the first try, up to MAX_ATTEMPTS in jobs.ts. */
+  attempt: number;
+  error: string | null;
+  lastSucceededAt: Date | null;
+  /** Runs in a row that failed every attempt. */
+  consecutiveFailures: number;
+  /** When a Primary Admin was emailed about the current failures; null once a run succeeds. */
+  alertedAt: Date | null;
 }

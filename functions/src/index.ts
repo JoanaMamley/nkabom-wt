@@ -7,7 +7,6 @@ import { onRequest } from 'firebase-functions/v2/https';
 initializeApp();
 
 export { backupFirestore } from './backups';
-export { schedulerHeartbeat } from './scheduled';
 export { enforceBudget } from './costs';
 export { getPhotoDownloadUrl, getPhotoUploadUrl } from './photos';
 

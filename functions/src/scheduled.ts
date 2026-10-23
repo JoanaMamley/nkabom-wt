@@ -1,4 +1,3 @@
-import { defineBoolean } from 'firebase-functions/params';
 import { error, info } from 'firebase-functions/logger';
 import {
   onSchedule,
@@ -15,8 +14,9 @@ export const JOB_RETRY = { retryCount: 3, minBackoffSeconds: 60, maxBackoffSecon
 export type JobOptions = Omit<ScheduleOptions, 'timeZone'>;
 
 /**
- * Makes a scheduled job (NKB-110) for reminders, calendar sync and the like. Use it instead of
- * onSchedule, for example:
+ * Makes a scheduled job (NKB-110). Only backupFirestore still uses it, until NKB-119 and NKB-120
+ * replace it; new scheduled work is a task in the Worker (worker/src/jobs.ts, NKB-118). Use it
+ * instead of onSchedule, for example:
  *
  *   export const sendReminders = scheduledJob('sendReminders', { schedule: 'every day 08:00' },
  *     async () => { ... });
@@ -51,20 +51,3 @@ export function scheduledJob(
     info('Scheduled job finished', { ...run, durationMs: Date.now() - started });
   });
 }
-
-// Set to true in a project's functions/.env file to see retries and error logs, then set it back.
-const heartbeatFail = defineBoolean('HEARTBEAT_FAIL', { default: false });
-
-/**
- * Sample job: does nothing but succeed, so a missing "Scheduled job finished" for it in the logs
- * means scheduled jobs are not running. HEARTBEAT_FAIL makes it fail instead, to check retries.
- */
-export const schedulerHeartbeat = scheduledJob(
-  'schedulerHeartbeat',
-  { schedule: 'every day 06:00' },
-  async () => {
-    if (heartbeatFail.value()) {
-      throw new Error('Heartbeat failed on purpose (HEARTBEAT_FAIL is true)');
-    }
-  },
-);

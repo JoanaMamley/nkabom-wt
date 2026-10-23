@@ -1,4 +1,15 @@
-import { decodeFields, encodeFields, type Fields, type FirestoreValue } from './firestore';
+import {
+  decodeFields,
+  decodeValue,
+  encodeFields,
+  type Fields,
+  type FirestoreValue,
+} from './firestore';
+
+interface StructuredQuery {
+  from: [{ collectionId: string }];
+  where: { fieldFilter: { field: { fieldPath: string }; op: 'EQUAL'; value: FirestoreValue } };
+}
 
 interface EncodedWrite {
   update?: { name: string; fields?: Record<string, FirestoreValue> };
@@ -58,11 +69,33 @@ export class FakeFirestore {
             return fields ? { found: { name, fields: encodeFields(fields) } } : { missing: name };
           }),
         );
+      case ':runQuery':
+        return this.runQuery(url, body['structuredQuery'] as StructuredQuery);
       case ':commit':
         return this.commit(body['writes'] as EncodedWrite[], body['transaction'] as string);
       default:
         return error(404, 'NOT_FOUND', 'Not found');
     }
+  }
+
+  // Only what findDocuments sends: one collection and one EQUAL filter.
+  private runQuery(url: string, query: StructuredQuery): Response {
+    const [{ collectionId }] = query.from;
+    const { field, value } = query.where.fieldFilter;
+    const wanted = decodeValue(value);
+    const prefix = url.split(':runQuery')[0].replace(/^https?:\/\/[^/]+\/v1\//, '');
+    const matches = [...this.docs].filter(
+      ([path, fields]) =>
+        path.split('/').length === 2 &&
+        path.startsWith(`${collectionId}/`) &&
+        fields[field.fieldPath] === wanted,
+    );
+    return Response.json([
+      ...matches.map(([path, fields]) => ({
+        document: { name: `${prefix}/${path}`, fields: encodeFields(fields) },
+      })),
+      { readTime: this.now.toISOString() },
+    ]);
   }
 
   private commit(writes: EncodedWrite[], transaction: string | undefined): Response {

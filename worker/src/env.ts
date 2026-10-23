@@ -1,3 +1,5 @@
+import type { JobMessage } from './jobs';
+
 // Bindings from wrangler.jsonc, and the secrets set with wrangler secret put.
 export interface Env {
   FIREBASE_PROJECT_ID: string;
@@ -25,8 +27,12 @@ export interface Env {
   GMAIL_APP_PASSWORD?: string;
   /** Secret: only if EMAIL_PROVIDER is brevo. */
   BREVO_API_KEY?: string;
+  /** Set to "true" to make the sample task fail, to check retries (see the README). */
+  SAMPLE_TASK_FAIL?: string;
   PHOTOS: KVNamespace;
   BACKUPS: KVNamespace;
+  /** The queue that runs scheduled tasks and bulk work (NKB-118). */
+  JOBS: Queue<JobMessage>;
 }
 
 // The emulators accept unsigned tokens, so emulator mode needs both the emulator setting and a
