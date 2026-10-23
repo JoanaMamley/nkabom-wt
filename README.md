@@ -234,7 +234,16 @@ Once, in `worker/`, signed in as the shared project accounts (see [docs/handbook
    ```
 
 3. `curl -s $API/v1/me` answers `401` `{"error":"Sign in required"}`.
-4. `curl -s $API/v1/me -H "Authorization: Bearer ${TOKEN%?}x"` (the token with its last character changed) answers `401` `{"error":"Invalid or expired sign-in"}`.
+4. Change one character in the middle of the token's signature, the part after the last `.`, and call again:
+
+   ```sh
+   SIG=${TOKEN##*.}; MID=$(( ${#SIG} / 2 ))
+   C=A; [ "${SIG:$MID:1}" = A ] && C=B
+   curl -s $API/v1/me -H "Authorization: Bearer ${TOKEN%.*}.${SIG:0:$MID}$C${SIG:$((MID + 1))}"
+   ```
+
+   It answers `401` `{"error":"Invalid or expired sign-in"}`. Do not change the last character instead: it holds only 2 bits of the signature, so a swap can leave the signature the same and the token valid.
+
 5. `curl -s $API/v1/me -H "Authorization: Bearer $TOKEN"` answers `{"uid":"<User UID>","role":"member"}`.
 6. In **Firestore Database**, the `users` collection now has a document with the User UID as its ID, `role` `member` and the test address, written by the Worker through the service account. Leave the user and document in place as data for the restore test (NKB-119).
 7. Open the staging app at `https://nkabom-staging.web.app` and check it loads.
