@@ -3,6 +3,7 @@ import { vi } from 'vitest';
 
 import type { Env } from './env';
 import { FakeFirestore } from './fake-firestore';
+import type { JobMessage } from './jobs';
 
 export const PROJECT_ID = 'nkabom-staging';
 
@@ -13,6 +14,7 @@ export function stagingEnv(overrides: Partial<Env> = {}): Env {
     APP_URL: 'https://nkabom-staging.web.app',
     PHOTOS: {} as KVNamespace,
     BACKUPS: {} as KVNamespace,
+    JOBS: {} as Queue<JobMessage>,
     ...overrides,
   };
 }

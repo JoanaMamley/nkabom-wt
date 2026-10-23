@@ -79,6 +79,17 @@ export const EMAIL_TEMPLATES = {
     paragraphs: ['This is the test notification you asked for. Email notifications are working.'],
     action: { label: 'Notification settings', url: data.settingsUrl },
   }),
+
+  /** NKB-118: a scheduled task failed every attempt. Sent once until the task succeeds again. */
+  jobFailed: (data: { task: string; schedule: string; attempts: number; error: string }) => ({
+    subject: `Nkabom scheduled task failed: ${data.task}`,
+    greeting: 'Hello,',
+    paragraphs: [
+      `The ${data.schedule} task "${data.task}" failed ${data.attempts} times in a row and will not be tried again until its next scheduled run.`,
+      `Last error: ${data.error}`,
+      'Its status is in Firestore under jobStatus, and the details in the Worker logs for 3 days. You will not be emailed again about this task until it has succeeded once.',
+    ],
+  }),
 } satisfies Record<string, (data: never) => EmailContent>;
 
 export type EmailTemplate = keyof typeof EMAIL_TEMPLATES;

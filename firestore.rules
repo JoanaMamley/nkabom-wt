@@ -34,5 +34,11 @@ service cloud.firestore {
     match /auditLog/{entryId} {
       allow read, write: if false;
     }
+
+    // jobStatus/{schedule}-{task}: the last run of each scheduled task (NKB-118), written by the
+    // Worker. Closed to the app; an admin view could open reads later.
+    match /jobStatus/{id} {
+      allow read, write: if false;
+    }
   }
 }

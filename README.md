@@ -366,44 +366,75 @@ An alternative only: Brevo needs a sending domain the project does not have. Its
 
 ## Scheduled jobs
 
-Reminders, calendar sync and backups run as scheduled Cloud Functions. Make each one with `scheduledJob` from [functions/src/scheduled.ts](functions/src/scheduled.ts) rather than `onSchedule`:
+Reminders, clean-ups, calendar sync and backups run as tasks in the Worker ([worker/src/jobs.ts](worker/src/jobs.ts)). Each environment has two Cron Triggers, set in [worker/wrangler.jsonc](worker/wrangler.jsonc), within the free plan's 5 per account:
+
+| Schedule   | Cron          | Runs                                | For                                                           |
+| ---------- | ------------- | ----------------------------------- | ------------------------------------------------------------- |
+| `daily`    | `0 2 * * *`   | 02:00 UTC, which is also Ghana time | Once-a-day work: backups (NKB-119), NKB-308, NKB-512, NKB-707 |
+| `frequent` | `*/5 * * * *` | Every 5 minutes                     | Checks that cannot wait a day                                 |
+
+Each trigger puts one message per task on the environment's `JOBS` queue (`nkabom-jobs-staging`, `nkabom-jobs-prod`), and the queue runs each task in an invocation of its own. That way each task gets the free plan's own limits (10 ms of CPU, 50 subrequests), and one failing task never stops the others.
+
+To add a task, write it as a `Task` and add it to its schedule in `SCHEDULES`:
 
 ```ts
-export const sendReminders = scheduledJob(
-  'sendReminders',
-  { schedule: 'every day 08:00' },
-  async () => {
+export const sendReminders: Task = {
+  name: 'sendReminders',
+  async run(env) {
     // ...
   },
-);
+};
+
+export const SCHEDULES = {
+  daily: { cron: '0 2 * * *', tasks: [sendReminders] },
+  // ...
+};
 ```
 
-Then export it from [functions/src/index.ts](functions/src/index.ts). Every job:
+Every task:
 
-- **Runs on Accra time.** A schedule like `every day 08:00` (or cron syntax, `0 8 * * *`) means 08:00 in Ghana.
-- **Is retried when it fails.** Cloud Scheduler tries a failed run again 3 times, after 1, 2 and 4 minutes. A job can pass its own `retryCount` and backoff settings. A retry repeats the whole run, so write jobs to skip work that is already done, for example by recording what was sent.
-- **Logs each run** to Cloud Logging, with the job name, the scheduled time and how long it took: `Scheduled job finished`, or `Scheduled job failed` with the error and stack. To find failures, search Logs Explorer for `jsonPayload.message="Scheduled job failed"`.
+- **Is retried when it fails.** A task that throws is tried again after 1, 2 and then 4 minutes: 4 attempts in all (`MAX_ATTEMPTS`). A retry repeats the whole task, so write tasks to skip work that is already done, for example by recording what was sent.
+- **Logs each attempt** to the Worker's logs, with the schedule, task, time the trigger fired, attempt and duration: `Scheduled task finished`, or `Scheduled task failed` with the error, the stack and `willRetry`. Each trigger also logs `Scheduled tasks queued`. Find them on the Worker's **Logs** tab (**Workers & Pages > nkabom-api-staging**), kept for 3 days, or follow them with `npx wrangler tail --env staging`.
+- **Keeps its last status in Firestore**, since the logs last only 3 days: `jobStatus/{schedule}-{task}`, such as `jobStatus/daily-sample`, with `status` (`succeeded`, `retrying` or `failed`), the attempt, the error, `lastSucceededAt` and `consecutiveFailures`. Only the Worker can read or write it; look at it in the Firebase console.
+- **Emails the Primary Admins when every attempt fails,** once until the task succeeds again, so a task failing every 5 minutes sends one email, not hundreds. Until a Primary Admin exists (NKB-209), the email goes to the shared project account (`GMAIL_USER`).
 
-The emulator does not run scheduled jobs. Test the handler with `job.run(...)`, as in [scheduled.spec.ts](functions/src/scheduled.spec.ts).
+Large jobs, such as sending the yearly reminder in batches (NKB-308) or a calendar re-sync (NKB-507), should queue their own messages on `JOBS` rather than do everything in one task: add a message type to `JobMessage` and handle it in `runJobMessages`.
 
-Cloud Scheduler gives 3 free jobs per billing account, then charges $0.10 a month for each job, counting every job in every project. So that it stays free:
+**Limits:** the free plan gives the account 10,000 queue operations a day, shared by both environments, and each task run uses about 3. A daily task costs almost nothing; a task on the 5-minute schedule costs about 860 a day in each environment. Messages are kept for 24 hours.
 
-- **One daily job per project for periodic tasks.** Reminders, clean-ups and other once-a-day work (NKB-308, NKB-512, NKB-707) run as tasks inside a single daily job, not as jobs of their own. The first story that needs one creates it with `scheduledJob` and moves the Firestore backup into it as a task; later stories add their task to it. Each task must be safe to run again, since a retry reruns them all, and one failing task must not stop the others from running.
-- **Its own job only when daily is not enough,** such as a check every few minutes. Note the extra cost in [docs/handbook/costs.md](docs/handbook/costs.md).
+### Running jobs locally
 
-Until the daily job exists, the backup is its own job. After that, each project has just the daily job: 2 jobs in total, within the free 3.
+`npm start` runs the Worker with `wrangler dev --test-scheduled`, and `wrangler dev` runs the queue locally too. Cron Triggers do not fire on their own locally. Fire one by calling its cron:
 
-### Heartbeat
+```sh
+curl 'http://127.0.0.1:8787/__scheduled?cron=0+2+*+*+*'    # daily
+curl 'http://127.0.0.1:8787/__scheduled?cron=*/5+*+*+*+*'  # every 5 minutes
+```
 
-`schedulerHeartbeat` runs every day at 06:00 and does nothing but succeed. It is temporary: it was meant to check scheduled jobs on staging once. NKB-118 now does that check with the Worker's triggers, and NKB-120 removes the heartbeat.
+The Worker's terminal then shows `Scheduled tasks queued` and `Scheduled task finished`, and the Emulator UI shows `jobStatus/daily-sample` or `jobStatus/frequent-sample`. To see a failure, stop the Worker, start it with `npm --prefix worker run dev -- --var SAMPLE_TASK_FAIL:true`, and fire a trigger: it fails 4 times over about 7 minutes, then logs the alert email (locally emails are logged, not sent).
 
-To check retries and error logs on staging:
+Tests drive the triggers and the queue directly, as in [worker/src/jobs.spec.ts](worker/src/jobs.spec.ts).
 
-1. In Cloud Scheduler, **Force run** `firebase-schedule-schedulerHeartbeat-us-central1`. Logs Explorer shows `Scheduled job finished`.
-2. Set `HEARTBEAT_FAIL=true` in `functions/.env.nkabom-staging` and run `npx firebase deploy --only functions:schedulerHeartbeat --project staging`.
-3. Force run it again. Logs Explorer shows `Scheduled job failed` four times (the run and its 3 retries) over about 7 minutes.
-4. Set `HEARTBEAT_FAIL=false` and deploy again. Do not commit it set to true.
-5. Remove the heartbeat: delete `schedulerHeartbeat` and its `HEARTBEAT_FAIL` setting from `scheduled.ts`, `index.ts`, the tests, `functions/.env.nkabom-staging` and `functions/.env.demo-nkabom`, and remove this section. The next deploy to each project asks to delete the function; say yes.
+### Setting up the queues
+
+Once, in `worker/`, signed in to the shared Cloudflare account:
+
+```sh
+npx wrangler queues create nkabom-jobs-staging
+npx wrangler queues create nkabom-jobs-prod
+```
+
+Then deploy each Worker as usual. The deploy adds the two Cron Triggers and connects the Worker to its queue; **Workers & Pages > nkabom-api-staging > Settings > Trigger events** lists them.
+
+### Checking staging
+
+The `sample` task, in both schedules, does nothing but succeed, or fail when `SAMPLE_TASK_FAIL` is `true`. It is there only for this check.
+
+1. Deploy staging (`npm run deploy:staging`). Within 5 minutes, `jobStatus/frequent-sample` appears in Firestore with `status` `succeeded`, and the Worker's logs show `Scheduled tasks queued` and `Scheduled task finished` for `frequent`.
+2. The next day after 02:00, `jobStatus/daily-sample` shows the daily trigger has run.
+3. Force a failure: in `worker/`, `npx wrangler deploy --env staging --var SAMPLE_TASK_FAIL:true`. On the next 5-minute run, the logs show `Scheduled task failed` with `willRetry: true`, and `frequent-sample` shows `retrying`. About 7 minutes later the fourth attempt fails with `willRetry: false`, the status is `failed`, and the alert email arrives. Later runs keep failing without sending more email.
+4. Deploy again without the setting, `npm --prefix worker run deploy:staging`. The next run succeeds and clears `consecutiveFailures` and `alertedAt`.
+5. Remove the sample task: delete `sampleTask` and its tests from `jobs.ts` and `jobs.spec.ts`, leave both schedules' `tasks` empty, and delete `SAMPLE_TASK_FAIL` from `env.ts`. Delete the two `jobStatus` documents, and remove this section.
 
 ## Costs
 

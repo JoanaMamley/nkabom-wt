@@ -20,7 +20,7 @@ import {
 } from 'firebase/firestore';
 import { afterAll, beforeAll, beforeEach, describe, it } from 'vitest';
 
-import { AUDIT_LOG, DIRECTORY, MEMBERS, USERS } from '../worker/src/model';
+import { AUDIT_LOG, DIRECTORY, JOB_STATUS, MEMBERS, USERS } from '../worker/src/model';
 
 // Runs against the Firestore emulator: npm run test:rules starts it for the test run.
 let env: RulesTestEnvironment;
@@ -231,6 +231,20 @@ describe('auditLog', () => {
   it('cannot be read from the app yet', async () => {
     await assertFails(getDoc(doc(primaryAdmin(), AUDIT_LOG, 'entry1')));
     await assertFails(getDocs(collection(primaryAdmin(), AUDIT_LOG)));
+  });
+});
+
+describe('jobStatus', () => {
+  beforeEach(() =>
+    seed(`${JOB_STATUS}/daily-sample`, { task: 'sample', status: 'failed', attempt: 4 }),
+  );
+
+  it('cannot be read or written from the app, even by a Primary Admin', async () => {
+    const primaryAdmin = env.authenticatedContext('efua', { role: 'primaryAdmin' }).firestore();
+
+    await assertFails(getDoc(doc(primaryAdmin, JOB_STATUS, 'daily-sample')));
+    await assertFails(updateDoc(doc(primaryAdmin, JOB_STATUS, 'daily-sample'), { status: 'ok' }));
+    await assertFails(setDoc(doc(as('ama'), JOB_STATUS, 'frequent-sample'), { status: 'ok' }));
   });
 });
 

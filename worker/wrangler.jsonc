@@ -26,6 +26,16 @@
     { "binding": "PHOTOS", "id": "local-photos" },
     { "binding": "BACKUPS", "id": "local-backups" },
   ],
+  // Scheduled jobs (NKB-118): daily at 02:00 and every 5 minutes, UTC, which is also Ghana time.
+  // They must match SCHEDULES in src/jobs.ts. Two per environment, within the free plan's 5 per
+  // account; locally they run only when called (see the README).
+  "triggers": { "crons": ["0 2 * * *", "*/5 * * * *"] },
+  // Each environment has its own queue, made with npx wrangler queues create (see the README). One
+  // message per invocation, so each task gets its own limits; jobs.ts retries failures itself.
+  "queues": {
+    "producers": [{ "binding": "JOBS", "queue": "nkabom-jobs" }],
+    "consumers": [{ "queue": "nkabom-jobs", "max_batch_size": 1, "max_retries": 3 }],
+  },
   "env": {
     "staging": {
       "name": "nkabom-api-staging",
@@ -40,6 +50,11 @@
         { "binding": "PHOTOS", "id": "ed86557f77284290b2c5ccccc4140ef3" },
         { "binding": "BACKUPS", "id": "f33b56df355f4a3fb5c4c1aacd323c00" },
       ],
+      "triggers": { "crons": ["0 2 * * *", "*/5 * * * *"] },
+      "queues": {
+        "producers": [{ "binding": "JOBS", "queue": "nkabom-jobs-staging" }],
+        "consumers": [{ "queue": "nkabom-jobs-staging", "max_batch_size": 1, "max_retries": 3 }],
+      },
     },
     "production": {
       "name": "nkabom-api-prod",
@@ -53,6 +68,11 @@
         { "binding": "PHOTOS", "id": "a65fc0d43e434c8397c1c6c5a1eaebcf" },
         { "binding": "BACKUPS", "id": "2159c3a238934c0bb6080867656dcec8" },
       ],
+      "triggers": { "crons": ["0 2 * * *", "*/5 * * * *"] },
+      "queues": {
+        "producers": [{ "binding": "JOBS", "queue": "nkabom-jobs-prod" }],
+        "consumers": [{ "queue": "nkabom-jobs-prod", "max_batch_size": 1, "max_retries": 3 }],
+      },
     },
   },
 }

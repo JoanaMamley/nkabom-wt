@@ -2,6 +2,7 @@ import { preflight, withCors } from './cors';
 import type { Env } from './env';
 import { sendEmail } from './email';
 import { HttpError, json } from './http';
+import { type JobMessage, queueScheduledTasks, runJobMessages } from './jobs';
 import { editProfile, register } from './members';
 import { getPhotoDownloadUrl, getPhotoUploadUrl, servePhoto } from './photos';
 import { requireAdmin } from './roles';
@@ -16,7 +17,10 @@ export default {
     }
     return withCors(await handle(request, env), request, env);
   },
-} satisfies ExportedHandler<Env>;
+  // Cron Triggers and the JOBS queue (NKB-118).
+  scheduled: (controller, env) => queueScheduledTasks(controller, env),
+  queue: (batch, env) => runJobMessages(batch, env),
+} satisfies ExportedHandler<Env, JobMessage>;
 
 async function handle(request: Request, env: Env): Promise<Response> {
   try {

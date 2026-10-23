@@ -1,10 +1,10 @@
 import type { ScheduledEvent } from 'firebase-functions/v2/scheduler';
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 const { error, info } = vi.hoisted(() => ({ error: vi.fn(), info: vi.fn() }));
 vi.mock('firebase-functions/logger', () => ({ error, info, warn: vi.fn() }));
 
-import { JOB_RETRY, scheduledJob, schedulerHeartbeat } from './scheduled';
+import { JOB_RETRY, scheduledJob } from './scheduled';
 
 const event: ScheduledEvent = { scheduleTime: '2026-10-21T06:00:00Z' };
 const noop = () => Promise.resolve();
@@ -74,28 +74,5 @@ describe('scheduledJob', () => {
     const job = scheduledJob('sample', { schedule: 'every 5 minutes', retryCount: 0 }, noop);
 
     expect(job.__endpoint.scheduleTrigger).toMatchObject({ retryConfig: { retryCount: 0 } });
-  });
-});
-
-describe('schedulerHeartbeat', () => {
-  afterEach(() => delete process.env.HEARTBEAT_FAIL);
-
-  it('succeeds', async () => {
-    await schedulerHeartbeat.run(event);
-
-    expect(info).toHaveBeenCalledWith(
-      'Scheduled job finished',
-      expect.objectContaining({ job: 'schedulerHeartbeat' }),
-    );
-  });
-
-  it('fails on purpose when HEARTBEAT_FAIL is true', async () => {
-    process.env.HEARTBEAT_FAIL = 'true';
-
-    await expect(schedulerHeartbeat.run(event)).rejects.toThrow(/on purpose/);
-    expect(error).toHaveBeenCalledWith(
-      'Scheduled job failed',
-      expect.objectContaining({ job: 'schedulerHeartbeat' }),
-    );
   });
 });
