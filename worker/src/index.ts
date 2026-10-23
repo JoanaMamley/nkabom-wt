@@ -1,9 +1,11 @@
-import { requireUser } from './auth';
+import { requireUser, type User } from './auth';
 import { preflight, withCors } from './cors';
 import type { Env } from './env';
+import { sendEmail } from './email';
 import { getDocument } from './firestore';
 import { HttpError, json } from './http';
 import { getPhotoDownloadUrl, getPhotoUploadUrl, servePhoto } from './photos';
+import { requireAdmin } from './roles';
 
 // The app's API (NKB-114). Writes with side effects go through here; the app reads Firestore
 // directly. Each endpoint except /health and the signed photo links starts with requireUser.
@@ -54,9 +56,30 @@ async function route(request: Request, env: Env): Promise<Response> {
     case '/v1/photos/download-url':
       allow(request, 'POST');
       return getPhotoDownloadUrl(request, env, await requireUser(request, env));
+    case '/v1/email/test':
+      allow(request, 'POST');
+      return sendTestEmail(env, await requireUser(request, env));
     default:
       throw new HttpError(404, 'Not found');
   }
+}
+
+// FR-4.14: an admin sends themselves a test email, which also checks the email set-up.
+async function sendTestEmail(env: Env, user: User): Promise<Response> {
+  await requireAdmin(env, user);
+  if (!user.email) {
+    throw new HttpError(400, 'Your account has no email address');
+  }
+  try {
+    await sendEmail(env, { email: user.email }, 'testNotification', {
+      name: 'there',
+      settingsUrl: `${env.APP_URL}/settings`,
+    });
+  } catch {
+    // sendEmail has logged why.
+    throw new HttpError(502, 'The email could not be sent');
+  }
+  return json({ sentTo: user.email });
 }
 
 function allow(request: Request, method: string): void {

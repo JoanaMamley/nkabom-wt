@@ -1,5 +1,6 @@
-// Every email the app sends (FR-8.5). Each template returns plain text, and renderEmail builds
-// both the text and the HTML version from it, so the two never drift apart. Add new emails here.
+// Every email the app sends (FR-8.5), sent with sendEmail in email.ts. Each template returns plain
+// text, and renderEmail builds both the text and the HTML version from it, so the two never drift
+// apart. Add new emails here.
 
 /** What a template says, before it is turned into text and HTML. */
 export interface EmailContent {
@@ -37,6 +38,8 @@ export const EMAIL_TEMPLATES = {
     greeting: `Hello ${data.firstName},`,
     paragraphs: [
       'Your registration has been approved. You can now log in to see the mentor directory and the rest of Nkabom.',
+      // The first email every member gets, so later ones reach the inbox (see the README, Email).
+      'So that our emails reach your inbox, please add the address this email came from to your contacts.',
     ],
     action: { label: 'Open Nkabom', url: data.appUrl },
   }),

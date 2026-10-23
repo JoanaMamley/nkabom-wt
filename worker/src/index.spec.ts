@@ -203,3 +203,56 @@ describe('CORS', () => {
     expect(response.headers.get('Access-Control-Allow-Origin')).toBe(ORIGIN);
   });
 });
+
+describe('POST /v1/email/test', () => {
+  // The emulators, with ama's users record holding the given role.
+  function asRole(role: string) {
+    vi.spyOn(globalThis, 'fetch').mockImplementation(async (input) =>
+      String(input).endsWith('accounts:lookup')
+        ? Response.json({ users: [{ localId: 'ama' }] })
+        : Response.json({ fields: { role: { stringValue: role } } }),
+    );
+    return { Authorization: `Bearer ${unsignedToken(claims('demo-nkabom'))}` };
+  }
+
+  it("sends an admin the test email at their sign-in's address", async () => {
+    const headers = asRole('admin');
+    const log = vi.spyOn(console, 'log').mockImplementation(() => undefined);
+
+    const response = await call(
+      '/v1/email/test',
+      { method: 'POST', headers },
+      emulatorEnv({ EMAIL_PROVIDER: 'log' }),
+    );
+
+    expect(await response.json()).toEqual({ sentTo: 'ama@example.com' });
+    expect(log).toHaveBeenCalledWith(
+      'Email not sent (EMAIL_PROVIDER=log)',
+      expect.objectContaining({
+        to: 'ama@example.com',
+        subject: 'Nkabom test notification',
+        text: expect.stringContaining('http://localhost:4200/settings'),
+      }),
+    );
+  });
+
+  it('refuses members', async () => {
+    const headers = asRole('member');
+
+    const response = await call('/v1/email/test', { method: 'POST', headers }, emulatorEnv());
+
+    expect(response.status).toBe(403);
+  });
+
+  it('answers 502 when the email cannot be sent', async () => {
+    const headers = asRole('primaryAdmin');
+    const logError = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+
+    // Gmail without its secrets.
+    const response = await call('/v1/email/test', { method: 'POST', headers }, emulatorEnv());
+
+    expect(response.status).toBe(502);
+    expect(await response.json()).toEqual({ error: 'The email could not be sent' });
+    expect(logError).toHaveBeenCalledWith('Email send failed', expect.anything());
+  });
+});

@@ -117,7 +117,7 @@ The projects stay on Spark, so skip the Blaze, budget and backup bucket steps (2
 2. Upgrade to the Blaze plan under **Usage and billing**.
 3. **Firestore Database > Create database** in production mode. The location cannot be changed later; use the same one for both projects.
 4. **Project settings > Your apps**: add a web app, then copy its config into `src/environments/environment.staging.ts` (staging) or `environment.ts` (production), locally only (see [Configuration and secrets](#configuration-and-secrets)).
-5. Set the email secret (see [Setting up Brevo](#setting-up-brevo)), adding `--project staging` or `--project production`. Photos no longer need one here: they use the Worker's `PHOTO_LINK_KEY`.
+5. Skip: photos and email no longer need Functions secrets. They use the Worker's secrets (see [Setting up the Worker](#setting-up-the-worker) and [Setting up Gmail](#setting-up-gmail)).
 6. Run `npm run deploy:staging` (or `deploy:production`). The first deploy asks for any setting missing from the `.env` file, such as `EMAIL_FROM`, and saves the answer there; commit it.
 7. Create the backup bucket: `scripts/create-backup-bucket.sh nkabom-staging` (or `nkabom-prod`; see [Backups](#backups)). It comes after the first deploy, which creates the service account the backup runs as.
 8. Set the budget and its cap: `scripts/create-budget.sh nkabom-staging 0.50` or `scripts/create-budget.sh nkabom-prod 1.50` (see [Costs](#costs)).
@@ -160,6 +160,7 @@ The photo endpoints are listed under [Photo storage](#photo-storage).
 | `PHOTOS`, `BACKUPS`           | KV      | The environment's Workers KV namespaces for photos (NKB-115) and backups (NKB-119)               |
 | `GOOGLE_SERVICE_ACCOUNT`      | secret  | The project's Firebase service account key, the whole JSON file                                  |
 | `PHOTO_LINK_KEY`              | secret  | A random key that signs photo links; a fixed value locally (see [Photo storage](#photo-storage)) |
+| Email settings and secrets    |         | See [Email](#email)                                                                              |
 
 Settings and KV namespace IDs are in [worker/wrangler.jsonc](worker/wrangler.jsonc). The staging and production blocks do not inherit the local ones, so the emulator settings never reach a deployed Worker, and the Worker also accepts emulator tokens only for a `demo-` project. Secrets are set per environment with `npx wrangler secret put NAME --env staging` (or `production`), run in `worker/`; each one is stored encrypted by Cloudflare and cannot be read back. Worker secrets are free.
 
@@ -288,38 +289,69 @@ The R2 photo functions from NKB-105 are still in `functions/` and unused; NKB-12
 
 ## Email
 
-Cloud Functions send every email through `sendEmail` in [functions/src/email.ts](functions/src/email.ts), using a template from [functions/src/email-templates.ts](functions/src/email-templates.ts), the one place email wording lives (FR-8.5):
+The Worker sends every email through `sendEmail` in [worker/src/email.ts](worker/src/email.ts), using a template from [worker/src/email-templates.ts](worker/src/email-templates.ts), the one place email wording lives (FR-8.5):
 
 ```ts
-await sendEmail({ email, name }, 'registrationApproved', { firstName, appUrl });
+await sendEmail(env, { email, name }, 'registrationApproved', { firstName, appUrl });
 ```
 
-A function that sends email must list the provider's secret: `onCall({ secrets: emailSecrets }, ...)`. Each template gives its text once, and both the plain-text and HTML versions are built from it, with typed-in values escaped. To add an email, add a template there; TypeScript then checks every caller's data.
+Each template gives its text once, and both the plain-text and HTML versions are built from it, with typed-in values escaped. To add an email, add a template there; TypeScript then checks every caller's data.
 
-A failed send is logged to Cloud Logging as `Email send failed`, with the provider, template, recipient and error but not the body, since that may hold a one-time link. The error is then thrown, so the caller can retry or fall back.
+A failed send is logged as `Email send failed`, with the provider, template, recipient and error but not the body, since that may hold a one-time link. The error is then thrown, so the caller can retry or fall back.
 
-| Setting           | Kind   | Value                                                                  |
-| ----------------- | ------ | ---------------------------------------------------------------------- |
-| `EMAIL_PROVIDER`  | string | `brevo` (default), or `log` to write emails to the Functions log       |
-| `EMAIL_FROM`      | string | Sender address, on a domain verified with the provider                 |
-| `EMAIL_FROM_NAME` | string | Sender name (default `Nkabom`)                                         |
-| `BREVO_API_KEY`   | secret | Brevo API key, set with `firebase functions:secrets:set BREVO_API_KEY` |
+| Setting              | Kind    | Value                                                                        |
+| -------------------- | ------- | ---------------------------------------------------------------------------- |
+| `EMAIL_PROVIDER`     | setting | `gmail` (deployed Workers), `log` (local), or `brevo`                        |
+| `EMAIL_FROM_NAME`    | setting | Sender name (default `Nkabom`)                                               |
+| `APP_URL`            | setting | The app's address, for links in emails                                       |
+| `GMAIL_USER`         | secret  | The shared project account's Gmail address, which every email is sent from   |
+| `GMAIL_APP_PASSWORD` | secret  | An app password for that account (see [Setting up Gmail](#setting-up-gmail)) |
+| `EMAIL_FROM`         | setting | Brevo only: sender address, on a domain verified with Brevo                  |
+| `BREVO_API_KEY`      | secret  | Brevo only                                                                   |
 
-The emulators use `log` (set in `functions/.env.demo-nkabom`), so nothing is sent locally: emails, links included, show in the Functions log in the Emulator UI. Never use `log` in a deployed project.
+The settings are in [worker/wrangler.jsonc](worker/wrangler.jsonc). The Gmail address is a secret rather than a setting only to keep account details out of the repo; recipients see it as the sender.
 
-To switch provider, add a function for it in [functions/src/email-providers.ts](functions/src/email-providers.ts) and a case in `email.ts`, then change `EMAIL_PROVIDER`. Callers and templates do not change.
+Locally, `EMAIL_PROVIDER` is `log`, so nothing is sent: emails, links included, are printed in the `wrangler dev` output. Never use `log` in a deployed Worker.
 
-### Setting up Brevo
+To switch provider, change `EMAIL_PROVIDER`; to add one, add a function for it in [worker/src/email-providers.ts](worker/src/email-providers.ts) and a case in `email.ts`. Callers and templates do not change.
 
-Not used: Brevo needs a domain the project does not have, so NKB-116 sends email through the shared Gmail account instead, and this section is replaced then.
+**Test email:** `POST /v1/email/test`, for admins only, sends the `testNotification` email to the caller's own address and answers `{ sentTo }`, or `502` if sending failed. It checks the whole set-up, and is the endpoint behind the "send a test notification" button (FR-4.14).
 
-Brevo's free plan sends up to 300 emails a day, shared by staging and production since both use one account.
+### Gmail
 
-1. Once: create a Brevo account with the shared project Google account (NKB-113).
-2. Once: **Settings > Senders, domains, IPs > Domains**: add the sending domain and add the DNS records Brevo shows (DKIM, DMARC, and the Brevo code), so mail is not marked as spam.
-3. Once, after creating the API keys: [app.brevo.com/security/authorised_ips](https://app.brevo.com/security/authorised_ips) (**Settings > Security > Authorized IPs**) **> Deactivate blocking.** The server sends from changing addresses, so Brevo's IP blocking would otherwise start rejecting it once it stops learning new ones.
-4. Per project: **SMTP & API > API keys**: create a key named after the project (so one can be revoked without the other), then run `firebase functions:secrets:set BREVO_API_KEY --project staging` (or `production`).
-5. The first deploy asks for `EMAIL_FROM`, an address on that domain.
+The `gmail` provider sends through Gmail's mail server, `smtp.gmail.com` on port 465 over TLS, signed in as the shared project account with an app password. No domain or email service is needed. It uses the Workers TCP sockets API ([worker/src/smtp.ts](worker/src/smtp.ts)), which allows every port but 25, and builds the message itself ([worker/src/mime.ts](worker/src/mime.ts)).
+
+**Daily limit:** Google allows a personal Gmail account about 500 emails a day, over a rolling 24 hours ([Gmail sending limits](https://support.google.com/mail/answer/22839)), and staging and production share the account. Large sends, such as the yearly profile reminder (FR-2.5), send at most `BULK_EMAILS_PER_DAY` (100) a day, so 1,000 members take 10 days, and approvals, invites and alerts keep room. Past the limit Gmail refuses with `550 5.4.5`, which shows in the `Email send failed` log, and sending resumes within a day.
+
+### Setting up Gmail
+
+Once per environment, signed in to the shared project Google account. Each environment gets its own app password, so one can be revoked without the other.
+
+1. Go to [myaccount.google.com/apppasswords](https://myaccount.google.com/apppasswords). It needs 2-Step Verification, which the account has (see [docs/handbook/account-setup.md](docs/handbook/account-setup.md)). Google may ask for the password again.
+2. Enter a name, `Nkabom staging` (or `Nkabom production`), and click **Create**. Google shows a 16-letter password once.
+3. Straight away, in `worker/`, set it and the account's address as secrets. Each command asks for the value; paste it and press Enter:
+
+   ```sh
+   npx wrangler secret put GMAIL_APP_PASSWORD --env staging
+   npx wrangler secret put GMAIL_USER --env staging
+   ```
+
+   Then close the Google page. The secret is the only copy; Google never shows the password again.
+
+4. Deploy the Worker (`npm --prefix worker run deploy:staging`), and check it with the test email: in Firestore, give a test user the `admin` role in `users/{uid}`, then call `POST /v1/email/test` with that user's ID token, as in [Checking staging](#checking-staging). The email arrives from the shared account's address.
+
+**Spam folder:** Gmail signs every message, so SPF, DKIM and DMARC all pass (checked on staging with **Show original**). Even so, a new account that has sent little has no reputation yet, and its early emails can land in spam. It improves as the account sends steady, small amounts that people open and do not mark as spam. To help, the registration-approved email asks each member to add the sender to their contacts, since Gmail rarely sends mail from a contact to spam; test inboxes should mark it **Not spam**. Sending from the project's own domain would fix it, but needs a paid domain.
+
+**Changing the account's password cancels every app password,** and email stops with `535` (`Username and Password not accepted`) in the `Email send failed` log. After a password change, make a new app password for each environment as above and set `GMAIL_APP_PASSWORD` again; no deploy is needed. Delete old app passwords from the same page.
+
+### Brevo
+
+An alternative only: Brevo needs a sending domain the project does not have. Its free plan sends up to 300 emails a day. To use it:
+
+1. Create a Brevo account with the shared project Google account, add the sending domain under **Settings > Senders, domains, IPs > Domains**, and add the DNS records Brevo shows.
+2. Under **Settings > Security > Authorized IPs**, turn IP blocking off: the Worker sends from changing addresses.
+3. Per environment, under **SMTP & API > API keys**, create a key named after it, and set it with `npx wrangler secret put BREVO_API_KEY --env staging` (or `production`).
+4. In `wrangler.jsonc`, set `EMAIL_PROVIDER` to `brevo` and `EMAIL_FROM` to an address on the domain, then deploy.
 
 ## Scheduled jobs
 
