@@ -1,18 +1,16 @@
+import { backupTask } from './backups';
 import { sendEmail } from './email';
 import type { Env } from './env';
 import { findDocuments, runTransaction, SERVER_TIME, WriteBatch, commit } from './firestore';
 import { JOB_STATUS, type JobOutcome, USERS } from './model';
+import { CONTINUES, type JobMessage, type JobRun, type Task, type TaskResult } from './tasks';
+
+export { continueTask, type JobMessage, type Task } from './tasks';
 
 // Scheduled jobs (NKB-118). Two Cron Triggers per environment, daily and every 5 minutes (the free
 // plan allows 5 per account), each queue one message per task on the JOBS queue. The queue runs
 // each task in its own invocation, so tasks get their own time and subrequest limits, and one
 // failing does not stop the others; a failed task is tried again with growing delays.
-
-/** A piece of periodic work. It may be run again after failing part-way, so it must skip work that is already done. */
-export interface Task {
-  name: string;
-  run: (env: Env) => Promise<void>;
-}
 
 /** Sample task: does nothing but succeed, or fail when SAMPLE_TASK_FAIL is "true". Removed after the staging check. */
 export const sampleTask: Task = {
@@ -26,24 +24,15 @@ export const sampleTask: Task = {
 
 /**
  * The tasks each trigger runs. Cron times are UTC, which is also Ghana time. Each cron must match
- * the triggers in wrangler.jsonc. Daily tasks (NKB-119 backups, NKB-308, NKB-512, NKB-707) go in
+ * the triggers in wrangler.jsonc. Daily tasks (backups, NKB-308, NKB-512, NKB-707) go in
  * daily; frequent is for checks that cannot wait a day, and each run of each task costs 3 of the
  * account's 10,000 queue operations a day, about 860 a day per frequent task in each environment.
  */
 export const SCHEDULES = {
-  daily: { cron: '0 2 * * *', tasks: [sampleTask] },
+  daily: { cron: '0 2 * * *', tasks: [sampleTask, backupTask] },
   frequent: { cron: '*/5 * * * *', tasks: [sampleTask] },
 } satisfies Record<string, { cron: string; tasks: Task[] }>;
 export type Schedule = keyof typeof SCHEDULES;
-
-/** A message on the JOBS queue. Stories that queue bulk work add their own message types. */
-export interface JobMessage {
-  type: 'task';
-  schedule: Schedule;
-  task: string;
-  /** When the trigger fired, in milliseconds. */
-  scheduledTime: number;
-}
 
 /** A failed task is tried this many times in all, waiting 1, 2 and then 4 minutes between. */
 export const MAX_ATTEMPTS = 4;
@@ -68,7 +57,12 @@ export async function queueScheduledTasks(
   }
   await env.JOBS.sendBatch(
     tasks.map((task) => ({
-      body: { type: 'task', schedule, task: task.name, scheduledTime: controller.scheduledTime },
+      body: {
+        type: 'task' as const,
+        schedule,
+        task: task.name,
+        scheduledTime: controller.scheduledTime,
+      },
     })),
   );
   console.log('Scheduled tasks queued', {
@@ -86,24 +80,32 @@ export async function runJobMessages(batch: MessageBatch<JobMessage>, env: Env):
 }
 
 async function runTaskMessage(message: Message<JobMessage>, env: Env): Promise<void> {
-  const { schedule, task: name, scheduledTime } = message.body;
+  const { type, schedule, task: name, scheduledTime } = message.body;
   const run = {
     schedule,
     task: name,
     scheduledTime: new Date(scheduledTime).toISOString(),
     attempt: message.attempts,
+    ...(type === 'step' && { step: true }),
   };
-  const task = SCHEDULES[schedule]?.tasks.find((candidate: Task) => candidate.name === name);
-  if (!task) {
+  const task: Task | undefined = SCHEDULES[schedule]?.tasks.find(
+    (candidate: Task) => candidate.name === name,
+  );
+  if (!task || (type === 'step' && !task.step)) {
     // Removed since the message was queued.
     console.error('Scheduled task not found', run);
     message.ack();
     return;
   }
 
+  const jobRun: JobRun = { schedule, task: name, scheduledTime };
   const started = Date.now();
+  let result: TaskResult;
   try {
-    await task.run(env);
+    result =
+      type === 'step'
+        ? await task.step!(env, jobRun, message.body.step)
+        : await task.run(env, jobRun);
   } catch (cause) {
     const error = cause instanceof Error ? cause.message : String(cause);
     const retry = message.attempts < MAX_ATTEMPTS;
@@ -124,6 +126,11 @@ async function runTaskMessage(message: Message<JobMessage>, env: Env): Promise<v
     return;
   }
 
+  if (result === CONTINUES) {
+    console.log('Scheduled task continues', { ...run, durationMs: Date.now() - started });
+    message.ack();
+    return;
+  }
   console.log('Scheduled task finished', { ...run, durationMs: Date.now() - started });
   message.ack();
   await saveStatus(env, message.body, message.attempts, 'succeeded', null);

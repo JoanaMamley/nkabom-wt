@@ -368,10 +368,10 @@ An alternative only: Brevo needs a sending domain the project does not have. Its
 
 Reminders, clean-ups, calendar sync and backups run as tasks in the Worker ([worker/src/jobs.ts](worker/src/jobs.ts)). Each environment has two Cron Triggers, set in [worker/wrangler.jsonc](worker/wrangler.jsonc), within the free plan's 5 per account:
 
-| Schedule   | Cron          | Runs                                | For                                                           |
-| ---------- | ------------- | ----------------------------------- | ------------------------------------------------------------- |
-| `daily`    | `0 2 * * *`   | 02:00 UTC, which is also Ghana time | Once-a-day work: backups (NKB-119), NKB-308, NKB-512, NKB-707 |
-| `frequent` | `*/5 * * * *` | Every 5 minutes                     | Checks that cannot wait a day                                 |
+| Schedule   | Cron          | Runs                                | For                                                             |
+| ---------- | ------------- | ----------------------------------- | --------------------------------------------------------------- |
+| `daily`    | `0 2 * * *`   | 02:00 UTC, which is also Ghana time | Once-a-day work: [backups](#backups), NKB-308, NKB-512, NKB-707 |
+| `frequent` | `*/5 * * * *` | Every 5 minutes                     | Checks that cannot wait a day                                   |
 
 Each trigger puts one message per task on the environment's `JOBS` queue (`nkabom-jobs-staging`, `nkabom-jobs-prod`), and the queue runs each task in an invocation of its own. That way each task gets the free plan's own limits (10 ms of CPU, 50 subrequests), and one failing task never stops the others.
 
@@ -448,46 +448,53 @@ What to check each month, and what to do when an alert arrives, is in the handbo
 
 ## Backups
 
-`backupFirestore` in [functions/src/backups.ts](functions/src/backups.ts) exports the whole Firestore database every day at 02:00 Accra time (FR-8.6), to `BACKUP_BUCKET/firestore/<UTC time>`, for example `gs://nkabom-prod-backups/firestore/2026-10-20T02-00-00Z`. It is a [scheduled job](#scheduled-jobs), so a failed export is retried and logged. The bucket deletes exports after 30 days.
+`backupFirestore` in [worker/src/backups.ts](worker/src/backups.ts) backs up every Firestore collection each day at 02:00 UTC (FR-8.6), as a task in the [daily schedule](#scheduled-jobs), to the environment's private `BACKUPS` Workers KV namespace. It reads each collection 100 documents at a time, one page per queued step, so every invocation stays within the free plan's limits, and a failed page is retried on its own. Collections added later are backed up without a change.
 
-Exports hold Firestore only. Photos are in Workers KV and Auth accounts in Firebase Auth, neither of which this covers.
+| KV key                                   | Holds                                                   | Kept     |
+| ---------------------------------------- | ------------------------------------------------------- | -------- |
+| `firestore/{backup ID}/{collection}/{n}` | A page of up to 100 documents, as JSON                  | 30 days  |
+| `firestore/{backup ID}/manifest`         | Written last: when it finished and how many documents   | 30 days  |
+| `auditLog/{backup ID}/{n}`               | Audit log entries added since the previous backup       | For good |
+| `firestore/latest`                       | The last finished backup, and how far the audit log got | For good |
 
-### Setting up the backup bucket
+The backup ID is the time the trigger fired, such as `2026-10-24T02:00:00Z`. A backup without a manifest did not finish. Documents are stored exactly as Firestore's REST API gives them, with their types, so a restore writes back the same values, timestamps to the microsecond included.
 
-Once per project, after its first deploy, with the [gcloud CLI](https://cloud.google.com/sdk/docs/install) signed in as the shared project account:
+The audit log only grows, so each backup holds just its new entries, and those are never deleted: a restore loads every increment up to the backup it restores. Everything else is backed up whole each day and kept 30 days.
 
-```sh
-scripts/create-backup-bucket.sh nkabom-staging   # or nkabom-prod
-```
+**Limits:** each page is one of KV's free 1,000 writes a day, shared with photo uploads and both environments; 1,000 members make about 35 pages a day per environment. Pages are a few hundred KB, far under KV's 25 MB for one value, and 30 days of backups for 1,000 members use roughly 100 MB of KV's free 1 GB.
 
-It creates `gs://<project ID>-backups`, private and in the Firestore database's location, applies [scripts/backup-lifecycle.json](scripts/backup-lifecycle.json) (delete after 30 days), and lets the default compute service account, which `backupFirestore` runs as, start exports and write them to the bucket. Running it again only updates the settings.
+Backups hold Firestore only. Photos are in Workers KV and Auth accounts in Firebase Auth, neither of which this covers.
 
-To check it, run the job now from **Cloud Scheduler** in the Google Cloud console (**Force run** on `firebase-schedule-backupFirestore-us-central1`), then see that a new folder appears in the bucket.
+The old Cloud Storage export, `functions/src/backups.ts`, never ran, since the projects stay on Spark. NKB-120 removes it with its bucket script.
 
 ### Restoring
 
-An import writes every document in the export over the document with the same path. It does not delete documents created since the export. Restore into a new database first, check it, and only then into `(default)`.
+[scripts/restore-backup.mjs](scripts/restore-backup.mjs) reads a backup through Wrangler, signed in to the shared Cloudflare account, writes every document to the target, then reads each one back and checks it matches the backup. Run it from the repo root.
 
-1. Pick the export: `gcloud storage ls gs://$PROJECT-backups/firestore/`.
-2. Create a database to restore into, in the same location:
+1. **Check the backup in the emulator first.** Start it (`npm run emulators`, or `npx firebase emulators:start --only firestore`), then:
 
    ```sh
-   gcloud firestore databases create --database=restore-check --location=$LOCATION --project=$PROJECT
-   gcloud firestore import gs://$PROJECT-backups/firestore/<time> --database=restore-check --project=$PROJECT
+   node scripts/restore-backup.mjs --from staging          # or --from production
    ```
 
-   The command waits until the import finishes. Follow a long one with `gcloud firestore operations list --database=restore-check --project=$PROJECT`.
+   It takes the latest backup, or the one named with `--backup 2026-10-24T02:00:00Z`; `npx wrangler kv key list --binding BACKUPS --env staging --remote --prefix firestore/` in `worker/` lists them. It restores into the emulator project `demo-restore`, which it empties first, so local data stays as it is and the check also finds documents that should not be there. It ends with `Check passed`, and the documents are in the Emulator UI under that project.
 
-3. In the Firebase console, open the `restore-check` database and check the collections and a few documents you know.
-4. To put the data back in the live database, during a quiet time, run the same import without `--database`. Firestore rules do not apply to an import.
-5. Delete the check database: `gcloud firestore databases delete --database=restore-check --project=$PROJECT`.
+2. **Then, if needed, restore into the project.** This writes every document in the backup over the document with the same path. It does not delete documents created since the backup. Generate a service account key (**Project settings > Service accounts > Generate new private key**), then:
+
+   ```sh
+   node scripts/restore-backup.mjs --from production --to nkabom-prod --key ~/Downloads/nkabom-prod-firebase-adminsdk-….json
+   ```
+
+   It asks you to type the project ID before writing anything. Afterwards delete the key file and empty the Bin, and delete the key in the Google Cloud console under **IAM & Admin > Service accounts > firebase-adminsdk > Keys**.
+
+Locally, `--from local` reads `wrangler dev`'s KV (add `--persist-to` if it was started with one), to try a restore without touching Cloudflare: fire the daily trigger as in [Running jobs locally](#running-jobs-locally), then restore.
 
 ### Restore tests
 
-Test a restore on staging once a year and after any change to the backup set-up, then add a row here.
+Test a restore from staging into the emulator once a year and after any change to the backup set-up, then add a row here.
 
-| Date | Project | Export | Result |
-| ---- | ------- | ------ | ------ |
+| Date | From | Backup | Result |
+| ---- | ---- | ------ | ------ |
 
 ## Data model
 

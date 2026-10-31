@@ -89,17 +89,24 @@ describe('Cron Triggers', () => {
     ['frequent', FREQUENT],
   ])('queue each %s task with the time the trigger fired', async (schedule, cron) => {
     const { env, sendBatch } = jobsEnv();
+    const tasks = SCHEDULES[schedule as keyof typeof SCHEDULES].tasks.map(({ name }) => name);
 
     await trigger(cron, env);
 
-    expect(sendBatch).toHaveBeenCalledWith([
-      { body: { type: 'task', schedule, task: 'sample', scheduledTime: fired.getTime() } },
-    ]);
+    expect(sendBatch).toHaveBeenCalledWith(
+      tasks.map((task) => ({
+        body: { type: 'task', schedule, task, scheduledTime: fired.getTime() },
+      })),
+    );
     expect(log).toHaveBeenCalledWith('Scheduled tasks queued', {
       schedule,
-      tasks: ['sample'],
+      tasks,
       scheduledTime: '2026-10-23T02:00:00.000Z',
     });
+  });
+
+  it('runs the daily backup', () => {
+    expect(SCHEDULES.daily.tasks.map(({ name }) => name)).toContain('backupFirestore');
   });
 
   it('logs a cron with no schedule and queues nothing', async () => {

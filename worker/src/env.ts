@@ -1,4 +1,4 @@
-import type { JobMessage } from './jobs';
+import type { JobMessage } from './tasks';
 
 // Bindings from wrangler.jsonc, and the secrets set with wrangler secret put.
 export interface Env {
