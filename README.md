@@ -1,6 +1,6 @@
 # Nkabom app
 
-Angular PWA, Firebase (Firestore rules, and Cloud Functions until NKB-120) and a Cloudflare Worker API for Nkabom, the WomenTrust alumnae community. One repo holds both. Requirements and backlog are in [docs/](docs/).
+Angular PWA, Firebase (Hosting, Authentication and Firestore) and a Cloudflare Worker API for Nkabom, the WomenTrust alumnae community. One repo holds both. Everything runs on free plans: Firebase on Spark, and Cloudflare Workers, Workers KV and Queues on the Workers free plan, with no card on either account. Requirements and backlog are in [docs/](docs/).
 
 ## Prerequisites
 
@@ -14,7 +14,7 @@ npm install
 npm start
 ```
 
-`npm start` runs the Firebase Emulator Suite (Auth, Firestore and Functions), the Worker and the Angular dev server together:
+`npm start` runs the Firebase Emulator Suite (Auth and Firestore), the Worker and the Angular dev server together:
 
 | Service     | URL                   |
 | ----------- | --------------------- |
@@ -22,7 +22,6 @@ npm start
 | Worker API  | http://127.0.0.1:8787 |
 | Emulator UI | http://127.0.0.1:4000 |
 | Auth        | http://127.0.0.1:9099 |
-| Functions   | http://127.0.0.1:5001 |
 | Firestore   | http://127.0.0.1:8080 |
 
 Local work uses the `demo-nkabom` project ID, so no Firebase login or credentials are needed. Emulator data is saved to `.emulator-data/` on exit and reloaded on the next start; delete the folder to start fresh.
@@ -30,10 +29,9 @@ Local work uses the `demo-nkabom` project ID, so no Firebase login or credential
 ## Layout
 
 - `src/` Angular app
-- `functions/` Cloud Functions (TypeScript, its own `package.json`; `npm install` at the root installs it), removed in NKB-120
-- `worker/` the Cloudflare Worker, the app's API (TypeScript, its own `package.json`, also installed by `npm install` at the root)
+- `worker/` the Cloudflare Worker, the app's API, scheduled jobs and backups (TypeScript, its own `package.json`; `npm install` at the root installs it)
 - `firestore.rules`, `firebase.json` Firebase config
-- `scripts/` one-off developer scripts, such as icon generation
+- `scripts/` developer scripts: icon generation, the contrast check, and restoring a backup
 - `docs/` requirements and backlog
 
 ## Scripts
@@ -42,12 +40,10 @@ Local work uses the `demo-nkabom` project ID, so no Firebase login or credential
 | --------------------------- | ------------------------------------------------------ |
 | `npm start`                 | Emulators plus dev server                              |
 | `npm run serve`             | Dev server only                                        |
-| `npm run emulators`         | Builds functions, then runs emulators only             |
+| `npm run emulators`         | Auth and Firestore emulators only                      |
 | `npm run worker`            | Worker only, with `wrangler dev`                       |
-| `npm run build:functions`   | Compile Cloud Functions                                |
 | `npm run build:worker`      | Type-check the Worker and bundle it (dry run)          |
 | `npm test`                  | App unit tests (Vitest)                                |
-| `npm run test:functions`    | Cloud Functions tests (Vitest)                         |
 | `npm run test:worker`       | Worker tests (Vitest, in the Workers runtime)          |
 | `npm run test:rules`        | Firestore security rules tests (emulator)              |
 | `npm run lint`              | ESLint (TypeScript and templates)                      |
@@ -57,10 +53,10 @@ Local work uses the `demo-nkabom` project ID, so no Firebase login or credential
 | `npm run build:staging`     | Same build, with the staging Firebase config           |
 | `npm run deploy:staging`    | Staging build, then deploy everything to staging       |
 | `npm run deploy:production` | Production build, then deploy everything to production |
+| `npm run icons`             | Regenerate the app icons from `public/icons/icon.svg`  |
+| `npm run check:contrast`    | Check theme colours are readable in both modes         |
 
-"Everything" is Hosting, Firestore rules and indexes, and the Worker. Cloud Functions are left out, since they need the Blaze plan.
-| `npm run icons` | Regenerate the app icons from `public/icons/icon.svg` |
-| `npm run check:contrast` | Check theme colours are readable in both modes |
+"Everything" is Hosting, Firestore rules and indexes, and the Worker.
 
 ## Continuous integration
 
@@ -69,7 +65,6 @@ GitHub Actions runs [.github/workflows/ci.yml](.github/workflows/ci.yml) on ever
 | Job      | Runs                                                                              |
 | -------- | --------------------------------------------------------------------------------- |
 | Frontend | `ng lint`, Prettier check, theme contrast check, app unit tests, production build |
-| Backend  | functions lint, Prettier check, functions tests, build                            |
 | Worker   | Worker lint, Prettier check, type check, tests, and a dry-run build               |
 | Rules    | Firestore security rules tests against the emulator                               |
 | CI       | passes only if every job above passes                                             |
@@ -80,7 +75,7 @@ To run the same checks locally:
 
 ```sh
 npm run lint && npm run format:check && npm run check:contrast && npm test -- --watch=false && npm run build \
-  && npm run test:functions && npm run build:functions && npm run test:worker && npm run build:worker \
+  && npm run test:worker && npm run build:worker \
   && npm run test:rules
 ```
 
@@ -88,10 +83,8 @@ npm run lint && npm run format:check && npm run check:contrast && npm test -- --
 
 - `src/environments/environment.development.ts` points the app at the emulators.
 - `src/environments/environment.ts` and `environment.staging.ts` hold the production and staging Firebase web config. The committed copies are empty: fill them in locally and keep them out of commits with `git update-index --skip-worktree src/environments/environment.ts src/environments/environment.staging.ts` (see [docs/handbook/account-setup.md](docs/handbook/account-setup.md)). Automated deploys will write them from GitHub secrets (NKB-121).
-- Server-side secrets (Cloudflare R2, email provider, Google service account) never go in this repo. `.env*`, `.secret.local`, key files and service account JSON are git-ignored.
-- The Worker's settings are in [worker/wrangler.jsonc](worker/wrangler.jsonc), one block per environment, and its secrets are set with `wrangler secret put` (see [Worker](#worker)). They never go in the repo.
-- `functions/.env.<project ID>` holds the non-secret Functions settings for that project: `demo-nkabom` for the emulators, `nkabom-staging` and `nkabom-prod` for the real projects. They are the only committed `.env` files; never put secrets in them.
-- Secrets are set per project with `firebase functions:secrets:set NAME --project staging` (or `production`) and kept in Google Cloud Secret Manager. A function only sees the secrets it lists in its options. Secret Manager is free for 6 secret versions per billing account, counting both projects, so keep each project to 3 secrets (`R2_CREDENTIALS`, `BREVO_API_KEY`, and the calendar key from NKB-501). Setting a secret again adds a version; after a deploy, `firebase functions:secrets:prune` destroys the versions no longer used.
+- Server-side secrets (the Google service account key, the Gmail app password, the photo link key) never go in this repo. They are Worker secrets, set with `wrangler secret put` (see [Worker](#worker)). `.env*`, key files and service account JSON are git-ignored.
+- The Worker's settings are in [worker/wrangler.jsonc](worker/wrangler.jsonc), one block per environment.
 
 ## Environments and deploys
 
@@ -101,7 +94,7 @@ npm run lint && npm run format:check && npm run check:contrast && npm test -- --
 | `staging`    | `nkabom-staging` | Trying changes against real services     |
 | `production` | `nkabom-prod`    | The live app                             |
 
-Both real projects belong to the shared project Google account (NKB-113). They stay on the free Spark plan, and server code moves from Cloud Functions to a Cloudflare Worker (NKB-114 to NKB-120), since the Blaze plan that Cloud Functions, scheduled functions and Firestore exports need could not be turned on without paying. Until NKB-120, the sections below still describe the Cloud Functions set-up. Because the default alias is the demo project, a bare `firebase deploy` fails instead of reaching a real project: always name one.
+Both real projects belong to the shared project Google account (NKB-113). They stay on the free Spark plan, which cannot be billed, so server code runs in a Cloudflare Worker on its free plan rather than in Cloud Functions: Cloud Functions, scheduled functions and Firestore exports all need the Blaze plan, which needs a card (NKB-114 to NKB-120). Because the default alias is the demo project, a bare `firebase deploy` fails instead of reaching a real project: always name one.
 
 Deploy by hand with `npm run deploy:staging` or `npm run deploy:production`. Each builds the app with that project's config and deploys Hosting, Firestore rules and indexes, and that environment's Worker together. Sign in first with `npx firebase login` and `npx wrangler login`, using the shared project accounts. Automated deploys come in NKB-121.
 
@@ -109,18 +102,15 @@ Firebase Hosting serves only HTTPS (FR-8.2): it redirects plain HTTP and sends a
 
 ### Setting up a project
 
-Create the shared project accounts (Google and Cloudflare) first, following [docs/handbook/account-setup.md](docs/handbook/account-setup.md), which also walks through steps 1, 3 and 4 below in the consoles. How the accounts are protected and recovered is in [docs/handbook/accounts.md](docs/handbook/accounts.md).
+Create the shared project accounts (Google and Cloudflare) first, following [docs/handbook/account-setup.md](docs/handbook/account-setup.md), which also walks through steps 1 to 3 below in the consoles. How the accounts are protected and recovered is in [docs/handbook/accounts.md](docs/handbook/accounts.md).
 
-The projects stay on Spark, so skip the Blaze, budget and backup bucket steps (2, 7 and 8), and do [Setting up the Worker](#setting-up-the-worker) in place of steps 5 and 6. Once for each of `nkabom-staging` and `nkabom-prod`, signed in as the shared project account:
+Once for each of `nkabom-staging` and `nkabom-prod`, signed in as the shared project account:
 
-1. In the [Firebase console](https://console.firebase.google.com), create the project with exactly that ID. If the ID is taken, choose another and change it in `.firebaserc`, the `functions/.env.<project ID>` file name, its `BACKUP_BUCKET`, and `.gitignore`.
-2. Upgrade to the Blaze plan under **Usage and billing**.
-3. **Firestore Database > Create database** in production mode. The location cannot be changed later; use the same one for both projects.
-4. **Project settings > Your apps**: add a web app, then copy its config into `src/environments/environment.staging.ts` (staging) or `environment.ts` (production), locally only (see [Configuration and secrets](#configuration-and-secrets)).
-5. Skip: photos and email no longer need Functions secrets. They use the Worker's secrets (see [Setting up the Worker](#setting-up-the-worker) and [Setting up Gmail](#setting-up-gmail)).
-6. Run `npm run deploy:staging` (or `deploy:production`). The first deploy asks for any setting missing from the `.env` file, such as `EMAIL_FROM`, and saves the answer there; commit it.
-7. Create the backup bucket: `scripts/create-backup-bucket.sh nkabom-staging` (or `nkabom-prod`; see [Backups](#backups)). It comes after the first deploy, which creates the service account the backup runs as.
-8. Set the budget and its cap: `scripts/create-budget.sh nkabom-staging 0.50` or `scripts/create-budget.sh nkabom-prod 1.50` (see [Costs](#costs)).
+1. In the [Firebase console](https://console.firebase.google.com), create the project with exactly that ID, on the Spark plan. If the ID is taken, choose another and change it in `.firebaserc` and in that environment's block of [worker/wrangler.jsonc](worker/wrangler.jsonc) (`FIREBASE_PROJECT_ID`, `ALLOWED_ORIGINS` and `APP_URL`).
+2. **Firestore Database > Create database** in production mode. The location cannot be changed later; use the same one for both projects.
+3. **Project settings > Your apps**: add a web app, then copy its config into `src/environments/environment.staging.ts` (staging) or `environment.ts` (production), locally only (see [Configuration and secrets](#configuration-and-secrets)).
+4. Set up the Worker for that environment: its secrets and KV namespaces ([Setting up the Worker](#setting-up-the-worker)), its email ([Setting up Gmail](#setting-up-gmail)) and its queue ([Setting up the queues](#setting-up-the-queues)).
+5. Run `npm run deploy:staging` (or `deploy:production`).
 
 ## Worker
 
@@ -296,8 +286,6 @@ Photos are resized in the browser to about 100 KB (NKB-302), so 1,000 members us
 
 Locally, `wrangler dev` keeps photos in its local KV in `worker/.wrangler/`, and signs links with the `PHOTO_LINK_KEY` in `wrangler.jsonc`, so no secret is needed. Without `PHOTO_LINK_KEY`, both endpoints answer `503` ("Photo storage is not configured").
 
-The R2 photo functions from NKB-105 are still in `functions/` and unused; NKB-120 removes them with the rest of the Cloud Functions set-up. Do not set up R2 buckets.
-
 ## Email
 
 The Worker sends every email through `sendEmail` in [worker/src/email.ts](worker/src/email.ts), using a template from [worker/src/email-templates.ts](worker/src/email-templates.ts), the one place email wording lives (FR-8.5):
@@ -432,13 +420,9 @@ Both triggers, the retries and the alert were checked on staging with a temporar
 
 ## Costs
 
-The app should cost under $5 a month. The guardrails (NKB-112):
+The app costs nothing to run: Firebase is on the free Spark plan and Cloudflare on the Workers free plan, and neither account has a card, so neither can charge. Past a free limit, the service stops rather than bills: Firestore refuses reads or writes until its daily quota resets at midnight Pacific time, and the Worker, KV and Queues refuse requests until midnight UTC.
 
-- **Budgets:** $1.50 a month for production and $0.50 for staging, made by [scripts/create-budget.sh](scripts/create-budget.sh). Alert emails go to the shared project account at 50%, 90% and 100%, and when the month is forecast to pass the budget.
-- **Cap:** `enforceBudget` in [functions/src/costs.ts](functions/src/costs.ts) receives each project's budget notifications on the `budget-alerts` topic, and turns off that project's billing once actual spend reaches its budget. Functions then stop until billing is turned back on by hand.
-- **Instance limit:** [functions/src/global-options.ts](functions/src/global-options.ts) caps every function at 10 instances. `index.ts` imports it first, and a test checks every exported function has the cap.
-
-What to check each month, and what to do when an alert arrives, is in the handbook: [docs/handbook/costs.md](docs/handbook/costs.md).
+The limits that matter, each month's check, and what to do when one is reached are in the handbook: [docs/handbook/costs.md](docs/handbook/costs.md).
 
 ## Backups
 
@@ -458,8 +442,6 @@ The audit log only grows, so each backup holds just its new entries, and those a
 **Limits:** each page is one of KV's free 1,000 writes a day, shared with photo uploads and both environments; 1,000 members make about 35 pages a day per environment. Pages are a few hundred KB, far under KV's 25 MB for one value, and 30 days of backups for 1,000 members use roughly 100 MB of KV's free 1 GB.
 
 Backups hold Firestore only. Photos are in Workers KV and Auth accounts in Firebase Auth, neither of which this covers.
-
-The old Cloud Storage export, `functions/src/backups.ts`, never ran, since the projects stay on Spark. NKB-120 removes it with its bucket script.
 
 ### Restoring
 
