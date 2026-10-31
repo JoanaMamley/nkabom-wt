@@ -27,8 +27,6 @@ export interface Env {
   GMAIL_APP_PASSWORD?: string;
   /** Secret: only if EMAIL_PROVIDER is brevo. */
   BREVO_API_KEY?: string;
-  /** Set to "true" to make the sample task fail, to check retries (see the README). */
-  SAMPLE_TASK_FAIL?: string;
   PHOTOS: KVNamespace;
   BACKUPS: KVNamespace;
   /** The queue that runs scheduled tasks and bulk work (NKB-118). */

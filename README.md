@@ -371,7 +371,7 @@ Reminders, clean-ups, calendar sync and backups run as tasks in the Worker ([wor
 | Schedule   | Cron          | Runs                                | For                                                             |
 | ---------- | ------------- | ----------------------------------- | --------------------------------------------------------------- |
 | `daily`    | `0 2 * * *`   | 02:00 UTC, which is also Ghana time | Once-a-day work: [backups](#backups), NKB-308, NKB-512, NKB-707 |
-| `frequent` | `*/5 * * * *` | Every 5 minutes                     | Checks that cannot wait a day                                   |
+| `frequent` | `*/5 * * * *` | Every 5 minutes                     | Checks that cannot wait a day (none yet)                        |
 
 Each trigger puts one message per task on the environment's `JOBS` queue (`nkabom-jobs-staging`, `nkabom-jobs-prod`), and the queue runs each task in an invocation of its own. That way each task gets the free plan's own limits (10 ms of CPU, 50 subrequests), and one failing task never stops the others.
 
@@ -395,7 +395,7 @@ Every task:
 
 - **Is retried when it fails.** A task that throws is tried again after 1, 2 and then 4 minutes: 4 attempts in all (`MAX_ATTEMPTS`). A retry repeats the whole task, so write tasks to skip work that is already done, for example by recording what was sent.
 - **Logs each attempt** to the Worker's logs, with the schedule, task, time the trigger fired, attempt and duration: `Scheduled task finished`, or `Scheduled task failed` with the error, the stack and `willRetry`. Each trigger also logs `Scheduled tasks queued`. Find them on the Worker's **Logs** tab (**Workers & Pages > nkabom-api-staging**), kept for 3 days, or follow them with `npx wrangler tail --env staging`.
-- **Keeps its last status in Firestore**, since the logs last only 3 days: `jobStatus/{schedule}-{task}`, such as `jobStatus/daily-sample`, with `status` (`succeeded`, `retrying` or `failed`), the attempt, the error, `lastSucceededAt` and `consecutiveFailures`. Only the Worker can read or write it; look at it in the Firebase console.
+- **Keeps its last status in Firestore**, since the logs last only 3 days: `jobStatus/{schedule}-{task}`, such as `jobStatus/daily-backupFirestore`, with `status` (`succeeded`, `retrying` or `failed`), the attempt, the error, `lastSucceededAt` and `consecutiveFailures`. Only the Worker can read or write it; look at it in the Firebase console.
 - **Emails the Primary Admins when every attempt fails,** once until the task succeeds again, so a task failing every 5 minutes sends one email, not hundreds. Until a Primary Admin exists (NKB-209), the email goes to the shared project account (`GMAIL_USER`).
 
 Large jobs, such as sending the yearly reminder in batches (NKB-308) or a calendar re-sync (NKB-507), should queue their own messages on `JOBS` rather than do everything in one task: add a message type to `JobMessage` and handle it in `runJobMessages`.
@@ -411,9 +411,9 @@ curl 'http://127.0.0.1:8787/__scheduled?cron=0+2+*+*+*'    # daily
 curl 'http://127.0.0.1:8787/__scheduled?cron=*/5+*+*+*+*'  # every 5 minutes
 ```
 
-The Worker's terminal then shows `Scheduled tasks queued` and `Scheduled task finished`, and the Emulator UI shows `jobStatus/daily-sample` or `jobStatus/frequent-sample`. To see a failure, stop the Worker, start it with `npm --prefix worker run dev -- --var SAMPLE_TASK_FAIL:true`, and fire a trigger: it fails 4 times over about 7 minutes, then logs the alert email (locally emails are logged, not sent).
+The daily trigger runs the [backup](#backups): the Worker's terminal shows `Scheduled tasks queued`, a `Scheduled task continues` for each page, then `Firestore backup finished` and `Scheduled task finished`, and the Emulator UI shows `jobStatus/daily-backupFirestore`. The 5-minute trigger has no tasks yet, so it does nothing. Locally, emails such as the failure alert are logged, not sent.
 
-Tests drive the triggers and the queue directly, as in [worker/src/jobs.spec.ts](worker/src/jobs.spec.ts).
+Tests drive the triggers and the queue directly, with a test task that can be made to fail, as in [worker/src/jobs.spec.ts](worker/src/jobs.spec.ts).
 
 ### Setting up the queues
 
@@ -426,15 +426,9 @@ npx wrangler queues create nkabom-jobs-prod
 
 Then deploy each Worker as usual. The deploy adds the two Cron Triggers and connects the Worker to its queue; **Workers & Pages > nkabom-api-staging > Settings > Trigger events** lists them.
 
-### Checking staging
+### Checked on staging
 
-The `sample` task, in both schedules, does nothing but succeed, or fail when `SAMPLE_TASK_FAIL` is `true`. It is there only for this check.
-
-1. Deploy staging (`npm run deploy:staging`). Within 5 minutes, `jobStatus/frequent-sample` appears in Firestore with `status` `succeeded`, and the Worker's logs show `Scheduled tasks queued` and `Scheduled task finished` for `frequent`.
-2. The next day after 02:00, `jobStatus/daily-sample` shows the daily trigger has run.
-3. Force a failure: in `worker/`, `npx wrangler deploy --env staging --var SAMPLE_TASK_FAIL:true`. On the next 5-minute run, the logs show `Scheduled task failed` with `willRetry: true`, and `frequent-sample` shows `retrying`. About 7 minutes later the fourth attempt fails with `willRetry: false`, the status is `failed`, and the alert email arrives. Later runs keep failing without sending more email.
-4. Deploy again without the setting, `npm --prefix worker run deploy:staging`. The next run succeeds and clears `consecutiveFailures` and `alertedAt`.
-5. Remove the sample task: delete `sampleTask` and its tests from `jobs.ts` and `jobs.spec.ts`, leave both schedules' `tasks` empty, and delete `SAMPLE_TASK_FAIL` from `env.ts`. Delete the two `jobStatus` documents, and remove this section.
+Both triggers, the retries and the alert were checked on staging with a temporary sample task (NKB-118): the 5-minute trigger ran on 23 October 2026, a forced failure was tried 4 times over about 7 minutes, sent one alert email to the shared account and no more while it kept failing, and recovered on the next deploy; the daily trigger ran at 02:00 UTC on 31 October 2026.
 
 ## Costs
 

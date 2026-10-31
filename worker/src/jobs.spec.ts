@@ -9,7 +9,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { Env } from './env';
 import type { FakeFirestore } from './fake-firestore';
 import worker from './index';
-import { type JobMessage, MAX_ATTEMPTS, retryDelaySeconds, sampleTask, SCHEDULES } from './jobs';
+import { type JobMessage, MAX_ATTEMPTS, retryDelaySeconds, SCHEDULES, type Task } from './jobs';
 import { emulatorEnv, mockEmulators } from './test-helpers';
 
 const DAILY = SCHEDULES.daily.cron;
@@ -20,7 +20,19 @@ let firestore: FakeFirestore;
 let log: ReturnType<typeof vi.spyOn>;
 let logError: ReturnType<typeof vi.spyOn>;
 
+// A task for these tests, in both schedules: it succeeds, or fails when its env has fail set.
+const sampleTask: Task = {
+  name: 'sample',
+  async run(env) {
+    if ((env as Env & { fail?: boolean }).fail) {
+      throw new Error('Sample task failed on purpose');
+    }
+  },
+};
+
 beforeEach(() => {
+  SCHEDULES.daily.tasks.push(sampleTask);
+  SCHEDULES.frequent.tasks.push(sampleTask);
   ({ firestore } = mockEmulators());
   log = vi.spyOn(console, 'log').mockImplementation(() => undefined);
   logError = vi.spyOn(console, 'error').mockImplementation(() => undefined);
@@ -28,15 +40,23 @@ beforeEach(() => {
 
 afterEach(() => {
   vi.restoreAllMocks();
+  for (const { tasks } of Object.values(SCHEDULES)) {
+    if (tasks.includes(sampleTask)) {
+      tasks.splice(tasks.indexOf(sampleTask), 1);
+    }
+  }
 });
 
-function jobsEnv(overrides: Partial<Env> = {}) {
+function jobsEnv({ fail = false, ...overrides }: Partial<Env> & { fail?: boolean } = {}) {
   const sendBatch = vi.fn();
-  const env = emulatorEnv({
-    EMAIL_PROVIDER: 'log',
-    JOBS: { sendBatch, send: vi.fn() } as unknown as Queue<JobMessage>,
-    ...overrides,
-  });
+  const env = Object.assign(
+    emulatorEnv({
+      EMAIL_PROVIDER: 'log',
+      JOBS: { sendBatch, send: vi.fn() } as unknown as Queue<JobMessage>,
+      ...overrides,
+    }),
+    { fail },
+  );
   return { env, sendBatch };
 }
 
@@ -105,8 +125,21 @@ describe('Cron Triggers', () => {
     });
   });
 
-  it('runs the daily backup', () => {
-    expect(SCHEDULES.daily.tasks.map(({ name }) => name)).toContain('backupFirestore');
+  it('runs only the backup each day, and nothing every 5 minutes yet', () => {
+    const names = (schedule: keyof typeof SCHEDULES) =>
+      SCHEDULES[schedule].tasks.filter((task) => task !== sampleTask).map(({ name }) => name);
+
+    expect(names('daily')).toEqual(['backupFirestore']);
+    expect(names('frequent')).toEqual([]);
+  });
+
+  it('queues nothing for a trigger with no tasks', async () => {
+    SCHEDULES.frequent.tasks.splice(SCHEDULES.frequent.tasks.indexOf(sampleTask), 1);
+    const { env, sendBatch } = jobsEnv();
+
+    await trigger(FREQUENT, env);
+
+    expect(sendBatch).not.toHaveBeenCalled();
   });
 
   it('logs a cron with no schedule and queues nothing', async () => {
@@ -165,7 +198,7 @@ describe('queued tasks', () => {
   });
 
   it('retries a failed task after a delay, and logs and records the failure', async () => {
-    const { env } = jobsEnv({ SAMPLE_TASK_FAIL: 'true' });
+    const { env } = jobsEnv({ fail: true });
 
     const result = await consume(env, message(1));
 
@@ -178,20 +211,20 @@ describe('queued tasks', () => {
       attempt: 1,
       durationMs: expect.any(Number),
       willRetry: true,
-      error: 'Sample task failed on purpose (SAMPLE_TASK_FAIL is true)',
+      error: 'Sample task failed on purpose',
       stack: expect.stringContaining('Sample task failed on purpose'),
     });
     expect(status()).toMatchObject({
       status: 'retrying',
       attempt: 1,
-      error: 'Sample task failed on purpose (SAMPLE_TASK_FAIL is true)',
+      error: 'Sample task failed on purpose',
       consecutiveFailures: 0,
     });
     expect(emailsSent()).toEqual([]);
   });
 
   it('waits 1, 2 and then 4 minutes between attempts', async () => {
-    const { env } = jobsEnv({ SAMPLE_TASK_FAIL: 'true' });
+    const { env } = jobsEnv({ fail: true });
 
     for (const attempt of [1, 2, 3]) {
       const result = await consume(env, message(attempt));
@@ -208,7 +241,7 @@ describe('queued tasks', () => {
     });
 
     it('stops retrying and records the run as failed', async () => {
-      const { env } = jobsEnv({ SAMPLE_TASK_FAIL: 'true' });
+      const { env } = jobsEnv({ fail: true });
 
       const result = await consume(env, message(MAX_ATTEMPTS));
 
@@ -222,7 +255,7 @@ describe('queued tasks', () => {
     });
 
     it('emails every Primary Admin once, and not again until the task succeeds', async () => {
-      const { env } = jobsEnv({ SAMPLE_TASK_FAIL: 'true' });
+      const { env } = jobsEnv({ fail: true });
 
       await consume(env, message(MAX_ATTEMPTS));
 
@@ -251,7 +284,7 @@ describe('queued tasks', () => {
     it('emails the shared project account while there is no Primary Admin', async () => {
       firestore.docs.delete('users/efua');
       firestore.docs.delete('users/kojo');
-      const { env } = jobsEnv({ SAMPLE_TASK_FAIL: 'true', GMAIL_USER: 'project@example.com' });
+      const { env } = jobsEnv({ fail: true, GMAIL_USER: 'project@example.com' });
 
       await consume(env, message(MAX_ATTEMPTS));
 
@@ -263,7 +296,7 @@ describe('queued tasks', () => {
     it('logs when there is no one to tell, and tries again on the next failure', async () => {
       firestore.docs.delete('users/efua');
       firestore.docs.delete('users/kojo');
-      const { env } = jobsEnv({ SAMPLE_TASK_FAIL: 'true' });
+      const { env } = jobsEnv({ fail: true });
 
       await consume(env, message(MAX_ATTEMPTS));
 
