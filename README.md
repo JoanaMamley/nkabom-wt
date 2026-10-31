@@ -93,7 +93,7 @@ Once the **CI** check has passed, [.github/workflows/ci.yml](.github/workflows/c
 
 Each deploy writes the Firebase web config into the app from the environment's secret ([scripts/write-environment.mjs](scripts/write-environment.mjs)), builds, then signs in to Google with Workload Identity Federation, so no Google key is stored anywhere, and to Cloudflare with an API token kept in GitHub. Deploys to one environment run one at a time. Hand deploys (`npm run deploy:staging`) still work as before.
 
-A preview shows the pull request's version of the app against staging's Firestore and Worker; rules and Worker changes in the pull request reach staging only when it is merged. Email and password sign-in works on a preview. Google sign-in (NKB-204) does not, since Firebase Auth accepts it only from listed domains and preview addresses change.
+A preview shows the pull request's version of the app against staging's Firestore and Worker; rules and Worker changes in the pull request reach staging only when it is merged. Email and password sign-in works on a preview. Google sign-in (NKB-210) does not, since Firebase Auth accepts it only from listed domains and preview addresses change.
 
 ### Releasing to production
 
@@ -344,7 +344,7 @@ Photos live in the Worker's private `PHOTOS` Workers KV namespace, one per envir
 
 Both need a sign-in, like every endpoint. The links themselves do not: they point at the Worker's own address, `/photos/{uid}/{uuid}.{ext}`, and carry an HMAC-SHA256 signature over the method, path and expiry (and, for uploads, the type and size), keyed by the `PHOTO_LINK_KEY` secret. A link that is missing, changed, expired, or used for the other method is refused with `403`.
 
-The upload link accepts only a file of the declared type (JPG, PNG or WebP) and exact size (up to 5 MB): PUT it with that `Content-Type`, and the Worker answers `204`. Send the returned `path` as `photoPath` to `POST /v1/registration` or `PATCH /v1/profile`, which accept only a photo already uploaded to the member's own `photos/{uid}/` folder. For now members can download only their own photo; admins (NKB-208) and the directory (NKB-601) add their own checks in `getPhotoDownloadUrl`.
+The upload link accepts only a file of the declared type (JPG, PNG or WebP) and exact size (up to 5 MB): PUT it with that `Content-Type`, and the Worker answers `204`. Send the returned `path` as `photoPath` to `POST /v1/registration` or `PATCH /v1/profile`, which accept only a photo already uploaded to the member's own `photos/{uid}/` folder. For now members can download only their own photo; admins (NKB-204) and the directory (NKB-601) add their own checks in `getPhotoDownloadUrl`.
 
 Photos are resized in the browser to about 100 KB (NKB-302), so 1,000 members use about 100 MB of KV's free 1 GB. Each upload is one of KV's free 1,000 writes a day, a limit shared by both environments and the backups (NKB-119). KV is eventually consistent: a new photo can take up to a minute to appear outside the place it was uploaded from, so the app should show the file it just uploaded rather than download it again.
 
@@ -448,7 +448,7 @@ Every task:
 - **Is retried when it fails.** A task that throws is tried again after 1, 2 and then 4 minutes: 4 attempts in all (`MAX_ATTEMPTS`). A retry repeats the whole task, so write tasks to skip work that is already done, for example by recording what was sent.
 - **Logs each attempt** to the Worker's logs, with the schedule, task, time the trigger fired, attempt and duration: `Scheduled task finished`, or `Scheduled task failed` with the error, the stack and `willRetry`. Each trigger also logs `Scheduled tasks queued`. Find them on the Worker's **Logs** tab (**Workers & Pages > nkabom-api-staging**), kept for 3 days, or follow them with `npx wrangler tail --env staging`.
 - **Keeps its last status in Firestore**, since the logs last only 3 days: `jobStatus/{schedule}-{task}`, such as `jobStatus/daily-backupFirestore`, with `status` (`succeeded`, `retrying` or `failed`), the attempt, the error, `lastSucceededAt` and `consecutiveFailures`. Only the Worker can read or write it; look at it in the Firebase console.
-- **Emails the Primary Admins when every attempt fails,** once until the task succeeds again, so a task failing every 5 minutes sends one email, not hundreds. Until a Primary Admin exists (NKB-209), the email goes to the shared project account (`GMAIL_USER`).
+- **Emails the Primary Admins when every attempt fails,** once until the task succeeds again, so a task failing every 5 minutes sends one email, not hundreds. Until a Primary Admin exists (NKB-207), the email goes to the shared project account (`GMAIL_USER`).
 
 Large jobs, such as sending the yearly reminder in batches (NKB-308) or a calendar re-sync (NKB-507), should queue their own messages on `JOBS` rather than do everything in one task: add a message type to `JobMessage` and handle it in `runJobMessages`.
 
@@ -560,7 +560,7 @@ Both refuse any other field, such as `status` or `createdAt`, with `400`. Text i
 
 ### Full records and the directory
 
-A member's full record, with date of birth and status, stays in `members/{uid}`, which only that member can read (and admins, from NKB-208). Other members see only `directory/{uid}`, which holds the FR-5.2 fields and nothing else (FR-3.1).
+A member's full record, with date of birth and status, stays in `members/{uid}`, which only that member can read (and admins, from NKB-204). Other members see only `directory/{uid}`, which holds the FR-5.2 fields and nothing else (FR-3.1).
 
 `syncDirectory` in [worker/src/directory.ts](worker/src/directory.ts) runs in the same transaction as every change to a profile, so the two are saved together or not at all. It lists a member once their status is `active`, copies changes to the listed fields, and removes the entry when the member is no longer active or the profile is deleted. Only active members can read the directory, so pending members see nothing (FR-2.9).
 

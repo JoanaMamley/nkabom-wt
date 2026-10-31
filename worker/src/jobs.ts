@@ -178,7 +178,7 @@ async function saveStatus(
 
 /**
  * Emails every Primary Admin, or the shared project account (GMAIL_USER) while there is none, as
- * before the first one is set up (NKB-209). True if at least one email was sent.
+ * before the first one is set up (NKB-207). True if at least one email was sent.
  */
 async function alertAdmins(
   env: Env,
