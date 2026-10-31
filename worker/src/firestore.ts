@@ -54,6 +54,97 @@ export async function findDocuments(
   );
 }
 
+/**
+ * A document as the REST API gives it: its path, such as members/ama, and its fields still in
+ * Firestore's typed form. Backups keep this form, so a restore writes back exactly what was read,
+ * timestamps and whole numbers included.
+ */
+export interface RawDocument {
+  path: string;
+  fields: Record<string, FirestoreValue>;
+}
+
+/** The top-level collections, in name order. */
+export async function listCollections(env: Env): Promise<string[]> {
+  const ids: string[] = [];
+  let pageToken: string | undefined;
+  do {
+    const page = (await post(env, 'listCollectionIds', 'list of collections', {
+      pageSize: 100,
+      ...(pageToken && { pageToken }),
+    })) as { collectionIds?: string[]; nextPageToken?: string };
+    ids.push(...(page.collectionIds ?? []));
+    pageToken = page.nextPageToken;
+  } while (pageToken);
+  return ids.sort();
+}
+
+/** One page of a collection's documents, in path order, and the token for the next page. */
+export async function listDocumentsPage(
+  env: Env,
+  collection: string,
+  pageSize: number,
+  pageToken?: string,
+): Promise<{ documents: RawDocument[]; nextPageToken?: string }> {
+  const query = new URLSearchParams({ pageSize: String(pageSize) });
+  if (pageToken) {
+    query.set('pageToken', pageToken);
+  }
+  const response = await fetch(`${documentUrl(env, collection)}?${query}`, {
+    headers: await authHeaders(env),
+  });
+  if (!response.ok) {
+    throw await firestoreError(response, `list of ${collection}`);
+  }
+  const page = (await response.json()) as { documents?: RestDocument[]; nextPageToken?: string };
+  return {
+    documents: (page.documents ?? []).map(rawDocument),
+    ...(page.nextPageToken && { nextPageToken: page.nextPageToken }),
+  };
+}
+
+/**
+ * Up to limit documents of a collection in order of a timestamp field, starting after the given
+ * document; ties are broken by path, so each document comes exactly once.
+ */
+export async function listDocumentsAfter(
+  env: Env,
+  collection: string,
+  field: string,
+  after: { time: string; path: string } | null,
+  limit: number,
+): Promise<RawDocument[]> {
+  const results = (await post(env, 'runQuery', `query of ${collection}`, {
+    structuredQuery: {
+      from: [{ collectionId: collection }],
+      orderBy: [
+        { field: { fieldPath: field }, direction: 'ASCENDING' },
+        { field: { fieldPath: '__name__' }, direction: 'ASCENDING' },
+      ],
+      ...(after && {
+        startAt: {
+          values: [
+            { timestampValue: after.time },
+            { referenceValue: documentName(env, after.path) },
+          ],
+          before: false,
+        },
+      }),
+      limit,
+    },
+  })) as { document?: RestDocument }[];
+  return results.flatMap(({ document }) => (document ? [rawDocument(document)] : []));
+}
+
+interface RestDocument {
+  name: string;
+  fields?: Record<string, FirestoreValue>;
+}
+
+function rawDocument({ name, fields }: RestDocument): RawDocument {
+  return { path: name.split('/documents/')[1], fields: fields ?? {} };
+}
+
 type Write =
   { op: 'create' | 'set' | 'update'; path: string; data: Fields } | { op: 'delete'; path: string };
 

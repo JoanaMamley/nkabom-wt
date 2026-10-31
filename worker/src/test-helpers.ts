@@ -3,7 +3,7 @@ import { vi } from 'vitest';
 
 import type { Env } from './env';
 import { FakeFirestore } from './fake-firestore';
-import type { JobMessage } from './jobs';
+import type { JobMessage } from './tasks';
 
 export const PROJECT_ID = 'nkabom-staging';
 

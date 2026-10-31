@@ -8,7 +8,10 @@ import {
 
 interface StructuredQuery {
   from: [{ collectionId: string }];
-  where: { fieldFilter: { field: { fieldPath: string }; op: 'EQUAL'; value: FirestoreValue } };
+  where?: { fieldFilter: { field: { fieldPath: string }; op: 'EQUAL'; value: FirestoreValue } };
+  orderBy?: { field: { fieldPath: string }; direction: 'ASCENDING' }[];
+  startAt?: { values: FirestoreValue[]; before: boolean };
+  limit?: number;
 }
 
 interface EncodedWrite {
@@ -47,7 +50,11 @@ export class FakeFirestore {
   async handle(url: string, init: RequestInit = {}): Promise<Response> {
     const [, rest] = url.split('/databases/(default)/documents');
     if (!init.method || init.method === 'GET') {
-      const fields = this.docs.get(decodeURIComponent(rest.slice(1)));
+      const [path, search] = rest.slice(1).split('?');
+      if (path.split('/').length % 2 === 1) {
+        return this.listDocuments(url, decodeURIComponent(path), new URLSearchParams(search));
+      }
+      const fields = this.docs.get(decodeURIComponent(path));
       return fields
         ? Response.json({ fields: encodeFields(fields) })
         : error(404, 'NOT_FOUND', 'Document not found.');
@@ -69,6 +76,10 @@ export class FakeFirestore {
             return fields ? { found: { name, fields: encodeFields(fields) } } : { missing: name };
           }),
         );
+      case ':listCollectionIds':
+        return Response.json({
+          collectionIds: [...new Set([...this.docs.keys()].map((path) => path.split('/')[0]))],
+        });
       case ':runQuery':
         return this.runQuery(url, body['structuredQuery'] as StructuredQuery);
       case ':commit':
@@ -78,24 +89,68 @@ export class FakeFirestore {
     }
   }
 
-  // Only what findDocuments sends: one collection and one EQUAL filter.
+  // Pages of a collection in path order; the page token is where the next page starts.
+  private listDocuments(url: string, collection: string, query: URLSearchParams): Response {
+    const prefix = this.documentsPrefix(url);
+    const all = this.inCollection(collection).sort(([a], [b]) => (a < b ? -1 : 1));
+    const start = Number(query.get('pageToken') ?? 0);
+    const end = start + Number(query.get('pageSize') ?? 300);
+    return Response.json({
+      documents: all.slice(start, end).map(([path, fields]) => ({
+        name: `${prefix}/${path}`,
+        fields: encodeFields(fields),
+      })),
+      ...(end < all.length && { nextPageToken: String(end) }),
+    });
+  }
+
+  // What findDocuments and listDocumentsAfter send: one EQUAL filter, or an order by one field
+  // and then the name, a start after a document, and a limit.
   private runQuery(url: string, query: StructuredQuery): Response {
+    const prefix = this.documentsPrefix(url);
     const [{ collectionId }] = query.from;
-    const { field, value } = query.where.fieldFilter;
-    const wanted = decodeValue(value);
-    const prefix = url.split(':runQuery')[0].replace(/^https?:\/\/[^/]+\/v1\//, '');
-    const matches = [...this.docs].filter(
-      ([path, fields]) =>
-        path.split('/').length === 2 &&
-        path.startsWith(`${collectionId}/`) &&
-        fields[field.fieldPath] === wanted,
-    );
+    let matches = this.inCollection(collectionId);
+    if (query.where) {
+      const { field, value } = query.where.fieldFilter;
+      const wanted = decodeValue(value);
+      matches = matches.filter(([, fields]) => fields[field.fieldPath] === wanted);
+    }
+    const order = query.orderBy?.[0]?.field.fieldPath;
+    if (order) {
+      const key = ([path, fields]: [string, Fields]) =>
+        [(fields[order] as Date).getTime(), `${prefix}/${path}`] as const;
+      matches.sort((a, b) => {
+        const [x, y] = [key(a), key(b)];
+        return x[0] - y[0] || (x[1] < y[1] ? -1 : x[1] > y[1] ? 1 : 0);
+      });
+      if (query.startAt) {
+        const [time, name] = query.startAt.values.map(decodeValue) as [Date, string];
+        matches = matches.filter((match) => {
+          const [t, n] = key(match);
+          return t > time.getTime() || (t === time.getTime() && n > name);
+        });
+      }
+    }
+    if (query.limit !== undefined) {
+      matches = matches.slice(0, query.limit);
+    }
     return Response.json([
       ...matches.map(([path, fields]) => ({
         document: { name: `${prefix}/${path}`, fields: encodeFields(fields) },
       })),
       { readTime: this.now.toISOString() },
     ]);
+  }
+
+  private inCollection(collection: string): [string, Fields][] {
+    return [...this.docs].filter(
+      ([path]) => path.split('/').length === 2 && path.startsWith(`${collection}/`),
+    );
+  }
+
+  // projects/{id}/databases/(default)/documents, from any of the API's URLs.
+  private documentsPrefix(url: string): string {
+    return `${url.replace(/^https?:\/\/[^/]+\/v1\//, '').split('/documents')[0]}/documents`;
   }
 
   private commit(writes: EncodedWrite[], transaction: string | undefined): Response {
