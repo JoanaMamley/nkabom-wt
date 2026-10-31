@@ -4,6 +4,7 @@ import { Environment } from './environment.model';
 // The "demo-" project ID tells Firebase there is no real project, so no credentials are needed.
 export const environment: Environment = {
   production: false,
+  privacyContact: 'privacy@example.com',
   emulators: {
     authUrl: 'http://127.0.0.1:9099',
     firestoreHost: '127.0.0.1',

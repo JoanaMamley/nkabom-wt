@@ -1,7 +1,9 @@
 import { signal } from '@angular/core';
 import { TestBed } from '@angular/core/testing';
+import { provideRouter, Router } from '@angular/router';
 import { provideServiceWorker } from '@angular/service-worker';
 import { App } from './app';
+import { routes } from './app.routes';
 import { AppUpdates } from './core/app-updates';
 import { Connectivity } from './core/connectivity';
 import { Theme } from './core/theme';
@@ -18,6 +20,7 @@ describe('App', () => {
     await TestBed.configureTestingModule({
       imports: [App],
       providers: [
+        provideRouter(routes),
         provideServiceWorker('sw.js', { enabled: false }),
         { provide: Connectivity, useValue: { online } },
         { provide: AppUpdates, useValue: updates },
@@ -26,8 +29,9 @@ describe('App', () => {
     }).compileComponents();
   });
 
-  async function render(): Promise<HTMLElement> {
+  async function render(url = '/'): Promise<HTMLElement> {
     const fixture = TestBed.createComponent(App);
+    await TestBed.inject(Router).navigateByUrl(url);
     await fixture.whenStable();
     return fixture.nativeElement as HTMLElement;
   }
@@ -41,6 +45,20 @@ describe('App', () => {
   it('should render title', async () => {
     const compiled = await render();
     expect(compiled.querySelector('h1')?.textContent).toContain('Nkabom');
+  });
+
+  it('links to the privacy notice from the footer (FR-1.13)', async () => {
+    const compiled = await render();
+
+    const link = compiled.querySelector<HTMLAnchorElement>('footer a');
+    expect(link?.textContent).toContain('Privacy notice');
+    expect(link?.getAttribute('href')).toBe('/privacy');
+  });
+
+  it('shows the privacy notice at /privacy', async () => {
+    const compiled = await render('/privacy');
+
+    expect(compiled.querySelector('main h1')?.textContent).toContain('Privacy notice');
   });
 
   it('shows the theme toggle on every page, offline included', async () => {

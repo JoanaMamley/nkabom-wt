@@ -1,6 +1,7 @@
 // The Firebase web config is kept out of the repo (README, Configuration and secrets), so automated
 // deploys (NKB-121) write it into the app before building, from the FIREBASE_WEB_CONFIG secret of
-// the GitHub environment.
+// the GitHub environment, and the privacy notice's contact address (FR-1.14) from its PRIVACY_CONTACT
+// variable.
 //
 //   node scripts/write-environment.mjs staging       # writes src/environments/environment.staging.ts
 //   node scripts/write-environment.mjs production    # writes src/environments/environment.ts
@@ -39,7 +40,13 @@ if (flag === '--print') {
     fail('FIREBASE_WEB_CONFIG is not set, or is not JSON');
   }
   check(config);
-  writeFileSync(target.file, environmentFile(config));
+  const privacyContact = process.env.PRIVACY_CONTACT ?? '';
+  // Kept out of the repo like the web config (docs/handbook/accounts.md), but the notice must name
+  // someone, so a deploy without it stops here.
+  if (!/^[^\s@]+@[^\s@]+$/.test(privacyContact)) {
+    fail('PRIVACY_CONTACT is not set, or is not an email address');
+  }
+  writeFileSync(target.file, environmentFile(config, privacyContact));
   console.log(`Wrote ${target.file} for ${config.projectId}`);
 }
 
@@ -57,7 +64,7 @@ function check(config) {
   }
 }
 
-function environmentFile(config) {
+function environmentFile(config, privacyContact) {
   const fields = FIELDS.map((field) => `    ${field}: ${JSON.stringify(config[field] ?? '')},`);
   return [
     "import { Environment } from './environment.model';",
@@ -65,6 +72,7 @@ function environmentFile(config) {
     `// Written by scripts/write-environment.mjs for the ${name} deploy. Not committed.`,
     'export const environment: Environment = {',
     '  production: true,',
+    `  privacyContact: ${JSON.stringify(privacyContact)},`,
     '  firebase: {',
     ...fields,
     '  },',
