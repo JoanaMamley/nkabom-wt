@@ -141,6 +141,8 @@ To check it: merge a pull request and watch **Deploy staging** finish on the **A
 
 If a Google step fails with `PERMISSION_DENIED` for a permission the roles above do not give, add the role that has it to `ROLES` in the script, run it again, and re-run the job. If the Cloudflare step fails with an authentication error (code 10000), the token is missing a permission from step 2.
 
+**Checked** on 31 October 2026 (NKB-121): pull request #26 got its preview comment and the preview loaded; merging it deployed staging, after which the staging API accepted the preview address and still refused other addresses; and `v1.0.0` deployed production once approved, with the app built against `nkabom-prod` and the production API accepting only the production app.
+
 ## Configuration and secrets
 
 - `src/environments/environment.development.ts` points the app at the emulators.
