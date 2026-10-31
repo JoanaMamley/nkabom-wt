@@ -58,6 +58,7 @@ jobs:
         env:
           ENVIRONMENT: ${{ inputs.environment }}
           FIREBASE_WEB_CONFIG: ${{ secrets.FIREBASE_WEB_CONFIG }}
+          PRIVACY_CONTACT: ${{ vars.PRIVACY_CONTACT }}
       - name: Build
         run: npm run ${{ inputs.environment == 'production' && 'build' || 'build:staging' }}
 

@@ -133,7 +133,7 @@ Once, signed in as the shared project accounts:
    Create it and copy the token: Cloudflare shows it once. The account ID is on **Workers & Pages**, on the right.
 
 3. **GitHub,** in the repository's **Settings**:
-   - **Environments > New environment** `staging`. Add the secret `FIREBASE_WEB_CONFIG`, the output of `node scripts/write-environment.mjs staging --print` run where your local `environment.staging.ts` has the real config, and the variables `GCP_WORKLOAD_IDENTITY_PROVIDER` and `GCP_SERVICE_ACCOUNT` printed in step 1 for `nkabom-staging`.
+   - **Environments > New environment** `staging`. Add the secret `FIREBASE_WEB_CONFIG`, the output of `node scripts/write-environment.mjs staging --print` run where your local `environment.staging.ts` has the real config, the variables `GCP_WORKLOAD_IDENTITY_PROVIDER` and `GCP_SERVICE_ACCOUNT` printed in step 1 for `nkabom-staging`, and the variable `PRIVACY_CONTACT`, the privacy notice's contact address. A deploy stops if `PRIVACY_CONTACT` is missing.
    - **New environment** `production`: tick **Required reviewers** and add yourself, leave **Prevent self-review** off, and under **Deployment branches and tags** choose **Selected branches and tags** and add a tag rule `v*`. Then the same secret and variables, with `production` and `nkabom-prod`.
    - **Secrets and variables > Actions:** the repository secret `CLOUDFLARE_API_TOKEN` and the repository variable `CLOUDFLARE_ACCOUNT_ID`, from step 2.
 
@@ -146,7 +146,7 @@ If a Google step fails with `PERMISSION_DENIED` for a permission the roles above
 ## Configuration and secrets
 
 - `src/environments/environment.development.ts` points the app at the emulators.
-- `src/environments/environment.ts` and `environment.staging.ts` hold the production and staging Firebase web config. The committed copies are empty: fill them in locally and keep them out of commits with `git update-index --skip-worktree src/environments/environment.ts src/environments/environment.staging.ts` (see [docs/handbook/account-setup.md](docs/handbook/account-setup.md)). CI builds with the empty copies; automated deploys write the real ones from GitHub secrets (see [Continuous deployment](#continuous-deployment)).
+- `src/environments/environment.ts` and `environment.staging.ts` hold the production and staging Firebase web config. The committed copies are empty: fill them in locally and keep them out of commits with `git update-index --skip-worktree src/environments/environment.ts src/environments/environment.staging.ts` (see [docs/handbook/account-setup.md](docs/handbook/account-setup.md)). CI builds with the empty copies; automated deploys write the real ones from GitHub secrets (see [Continuous deployment](#continuous-deployment)). The same local copies also hold `privacyContact`, the email address the privacy notice gives for questions about personal data (FR-1.14). It stays out of the repo with the rest, so the shared account's address is never committed ([docs/handbook/accounts.md](docs/handbook/accounts.md)); a build without it, such as CI's, tells people to contact the executives instead.
 - Server-side secrets (the Google service account key, the Gmail app password, the photo link key) never go in this repo. They are Worker secrets, set with `wrangler secret put` (see [Worker](#worker)). `.env*`, key files and service account JSON are git-ignored.
 - The Worker's settings are in [worker/wrangler.jsonc](worker/wrangler.jsonc), one block per environment.
 
@@ -172,7 +172,7 @@ Once for each of `nkabom-staging` and `nkabom-prod`, signed in as the shared pro
 
 1. In the [Firebase console](https://console.firebase.google.com), create the project with exactly that ID, on the Spark plan. If the ID is taken, choose another and change it in `.firebaserc` and in that environment's block of [worker/wrangler.jsonc](worker/wrangler.jsonc) (`FIREBASE_PROJECT_ID`, `ALLOWED_ORIGINS` and `APP_URL`).
 2. **Firestore Database > Create database** in production mode. The location cannot be changed later; use the same one for both projects.
-3. **Project settings > Your apps**: add a web app, then copy its config into `src/environments/environment.staging.ts` (staging) or `environment.ts` (production), locally only (see [Configuration and secrets](#configuration-and-secrets)).
+3. **Project settings > Your apps**: add a web app, then copy its config into `src/environments/environment.staging.ts` (staging) or `environment.ts` (production), with `privacyContact` set to the privacy notice's contact address, locally only (see [Configuration and secrets](#configuration-and-secrets)).
 4. Set up the Worker for that environment: its secrets and KV namespaces ([Setting up the Worker](#setting-up-the-worker)), its email ([Setting up Gmail](#setting-up-gmail)) and its queue ([Setting up the queues](#setting-up-the-queues)).
 5. Run `npm run deploy:staging` (or `deploy:production`).
 

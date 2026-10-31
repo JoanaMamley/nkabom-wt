@@ -1,0 +1,132 @@
+<article class="notice">
+  <h1>Privacy notice</h1>
+  <p class="updated">Last updated 31 October 2026</p>
+
+  <p>
+    Nkabom is the online community of WomenTrust alumnae. This notice explains what we keep about
+    you, who can see it, and what you can do about it. It follows Ghana's Data Protection Act, 2012
+    (Act 843).
+  </p>
+
+  <section id="collected" aria-labelledby="collected-title">
+    <h2 id="collected-title">What we collect</h2>
+    <p>When you register, we ask for:</p>
+    <ul>
+      <li>your first name(s) and surname</li>
+      <li>your date of birth</li>
+      <li>whether you are a student or working, and your course of study or occupation</li>
+      <li>the year you graduated, or expect to graduate, from tertiary education</li>
+      <li>a profile photo</li>
+    </ul>
+    <p>
+      We also keep your email address, so you can log in and we can send you messages, and a record
+      of the constitution version you accepted. If you use mentorship, we keep the requests you send
+      and receive. If you turn on notifications, we keep a code for each device that receives them.
+    </p>
+    <p>We do not use advertising or tracking, and we never sell your data.</p>
+  </section>
+
+  <section id="why" aria-labelledby="why-title">
+    <h2 id="why-title">Why we collect it</h2>
+    <ul>
+      <li>to check you are a WomenTrust alumna before your account is approved</li>
+      <li>to show your profile in the member directory, so alumnae can find mentors</li>
+      <li>so the executives can remember members' birthdays</li>
+      <li>
+        to send you messages about your account, mentorship requests and changes to the constitution
+      </li>
+      <li>to keep the community's records up to date</li>
+    </ul>
+  </section>
+
+  <section id="who-sees" aria-labelledby="who-sees-title">
+    <h2 id="who-sees-title">Who can see what</h2>
+    <ul>
+      <li>
+        <strong>The executives</strong>, who run the site as its admins, can see your full record.
+      </li>
+      <li>
+        <strong>Other approved members</strong> can see only your directory profile: your first
+        name, surname, photo, course or occupation, and graduation year. They never see your date of
+        birth.
+      </li>
+      <li>
+        <strong>Your email address</strong> is shared with another member only when one of you
+        accepts the other's mentorship request, and is hidden again when the mentorship ends.
+      </li>
+    </ul>
+    <p>Until your registration is approved, other members cannot see you at all.</p>
+  </section>
+
+  <section id="birthdays" aria-labelledby="birthdays-title">
+    <h2 id="birthdays-title">Birthdays</h2>
+    <p>
+      Once you are approved, your name and birthday are added to a Google Calendar shared only with
+      the executives, so they can remember your birthday. The calendar shows the day and month only:
+      never the year you were born, your age, your photo or anything else about you. We never send
+      you birthday messages from the site.
+    </p>
+  </section>
+
+  <section id="where" aria-labelledby="where-title">
+    <h2 id="where-title">Where your data is kept</h2>
+    <p>
+      Nkabom runs on services from Google and Cloudflare. Google (Firebase) handles logging in, the
+      database and notifications, keeps the birthday calendar, and sends our emails through Gmail.
+      Cloudflare runs the site's server and stores photos and backups. Their servers may be outside
+      Ghana. They store and process your data only to run the site for us.
+    </p>
+  </section>
+
+  <section id="how-long" aria-labelledby="how-long-title">
+    <h2 id="how-long-title">How long we keep it</h2>
+    <ul>
+      <li>
+        We keep your details while you are a member, and ask you once a year to check they are still
+        right.
+      </li>
+      <li>
+        If you ask us to delete your account, we remove your details, photo and birthday within 30
+        days.
+      </li>
+      <li>If your registration is not approved, we delete it after 30 days.</li>
+      <li>Backup copies are deleted automatically after 30 days.</li>
+      <li>
+        We keep a short record of what the executives do on the site, such as approving or deleting
+        an account, so the community's records can be checked.
+      </li>
+    </ul>
+  </section>
+
+  <section id="rights" aria-labelledby="rights-title">
+    <h2 id="rights-title">Your rights</h2>
+    <ul>
+      <li><strong>See your data:</strong> your profile shows everything you gave us.</li>
+      <li><strong>Correct it:</strong> you can edit your profile at any time.</li>
+      <li>
+        <strong>Delete it:</strong> you can ask for your account and data to be deleted, as above.
+      </li>
+      <li>
+        <strong>Stop mentorship requests:</strong> you can turn them off in your profile at any
+        time.
+      </li>
+    </ul>
+    <p>
+      If you are unhappy with how we handle your data, you can also complain to Ghana's Data
+      Protection Commission.
+    </p>
+  </section>
+
+  <section id="contact" aria-labelledby="contact-title">
+    <h2 id="contact-title">Who to contact</h2>
+    @if (contact) {
+      <p>
+        For any question or request about your data, email
+        <a [href]="'mailto:' + contact">{{ contact }}</a
+        >.
+      </p>
+    } @else {
+      <p>For any question or request about your data, contact any of the executives.</p>
+    }
+  </section>
+</article>

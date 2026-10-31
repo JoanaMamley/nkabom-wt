@@ -10,11 +10,12 @@
 <!-- Hidden rather than removed while offline, so a half-filled form survives a dropped connection. -->
 <div [hidden]="!online()">
   <main>
-    <h1>Nkabom</h1>
-    <p>The WomenTrust alumnae community.</p>
+    <router-outlet />
   </main>
 
-  <router-outlet />
+  <footer class="app-footer">
+    <a routerLink="/privacy">Privacy notice</a>
+  </footer>
 </div>
 
 @if (updates.ready()) {

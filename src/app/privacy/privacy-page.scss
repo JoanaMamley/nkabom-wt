@@ -1,0 +1,22 @@
+.notice {
+  max-width: 40rem;
+  margin: 0 auto;
+  padding: 1rem 0 2rem;
+}
+
+.updated {
+  color: var(--color-text-muted);
+}
+
+h2 {
+  margin-top: 2rem;
+}
+
+li + li {
+  margin-top: 0.25rem;
+}
+
+// Long addresses wrap instead of pushing the page sideways on narrow phones.
+a {
+  overflow-wrap: anywhere;
+}

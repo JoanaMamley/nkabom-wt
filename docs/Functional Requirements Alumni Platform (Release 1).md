@@ -182,7 +182,7 @@ The developer decides each of these.
 1. Whether admins are blocked until they accept a new constitution version (FR-6.11).
 2. Whether to build the optional WhatsApp channel (FR-4.17) at all.
 3. The values for N pending requests (FR-5.10) and the registration reminder period (FR-2.11).
-4. Whether storing birthdays in Google Calendar counts as a transfer of data abroad that the privacy notice needs to cover.
+4. ~~Whether storing birthdays in Google Calendar counts as a transfer of data abroad that the privacy notice needs to cover.~~ Decided: the notice covers it. It says data is held by Google (Firebase, Calendar, Gmail) and Cloudflare, whose servers may be outside Ghana (NKB-201).
 5. Google's Calendar API pricing page mentions possible charges for exceeding quotas later in 2026. Usage is far below any limit, but check the page before launch.
 6. How the constitution text affects this list. Once the text is in hand, read it against these requirements before building section 6, since it may define alumna eligibility, executive roles, or election rules that change FR-2.9, section 1, or the voting feature later.
 7. ~~Which email provider sends messages from Cloud Functions (FR-8.5).~~ Decided: Brevo, whose free plan allows 300 emails a day. The provider can be swapped by configuration (NKB-106). Changed: email is sent through the shared Gmail account, with an app password, since Brevo needs a domain the project does not have (NKB-116).
