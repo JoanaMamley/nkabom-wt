@@ -2,7 +2,7 @@ rules_version = '2';
 
 // Default deny (FR-1.12): any path not matched below is closed. Only the Worker writes data,
 // through the service account, which the rules do not apply to; the app reads. Shapes are in
-// worker/src/model.ts. Admin access arrives with role claims in NKB-208.
+// worker/src/model.ts. Admin access arrives with role claims in NKB-204.
 service cloud.firestore {
   match /databases/{database}/documents {
     function isSelf(uid) {

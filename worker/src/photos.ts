@@ -61,7 +61,7 @@ export async function getPhotoDownloadUrl(
   if (!owner) {
     throw new HttpError(400, 'Not a photo path');
   }
-  // Members see only their own photo for now. Admins (NKB-208) and the directory (NKB-601) add
+  // Members see only their own photo for now. Admins (NKB-204) and the directory (NKB-601) add
   // their own access checks here.
   if (owner !== user.uid) {
     throw new HttpError(403, 'You cannot view this photo');

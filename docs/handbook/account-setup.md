@@ -65,7 +65,7 @@ Do this twice: first `nkabom-staging`, then `nkabom-prod`. Sign in to [console.f
 1. Left menu: **Security > Authentication** (or **Build > Authentication**), then **Get started**.
 2. **Sign-in method > Email/Password > Enable** (leave **Email link** off) **> Save**.
 
-The app's sign-up arrives in NKB-201.
+The app's sign-up arrives in NKB-202.
 
 ### Register the web app
 
@@ -107,7 +107,7 @@ Add the Cloudflare password, 2-step method and recovery codes to the private acc
 
 The app's email is sent from the shared account's Gmail address, through Gmail's mail server with an app password, so no domain or email service is needed. Nothing to set up now beyond 2-Step Verification, which section 1 turned on: app passwords only exist on accounts that have it. The app password itself is made in NKB-116 at [myaccount.google.com/apppasswords](https://myaccount.google.com/apppasswords) and set straight away as a Worker secret, so it is never kept anywhere else.
 
-If you already turned on the Gmail API or started the Google Auth Platform sign-in screen in `nkabom-prod`, leave them as they are. The Gmail API is not used but costs nothing, and the sign-in screen is needed for Google login, which publishes it in NKB-204.
+If you already turned on the Gmail API or started the Google Auth Platform sign-in screen in `nkabom-prod`, leave them as they are. The Gmail API is not used but costs nothing, and the sign-in screen is needed for Google login, which publishes it in NKB-210.
 
 ## 5. Tools
 

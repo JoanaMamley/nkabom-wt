@@ -50,7 +50,7 @@ describe('requireAccount', () => {
 
   it('keeps a record written meanwhile, such as an admin’s, and uses its role', async () => {
     const firestore = new FakeFirestore();
-    // The admin record (NKB-210) lands between the read and the create.
+    // The admin record (NKB-208) lands between the read and the create.
     const handle = firestore.handle.bind(firestore);
     vi.spyOn(firestore, 'handle').mockImplementation(async (url, init) => {
       if (url.endsWith(':commit')) {

@@ -27,7 +27,7 @@ async function userRole(env: Env, user: User): Promise<string> {
     return String(record['role']);
   }
 
-  // create, not set: admin accounts (NKB-210) write their own record, which must not be replaced
+  // create, not set: admin accounts (NKB-208) write their own record, which must not be replaced
   // by a member one if their first call races with it.
   const batch = new WriteBatch();
   batch.create(path, { role: 'member', email: user.email, createdAt: SERVER_TIME });

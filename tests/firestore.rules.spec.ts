@@ -208,7 +208,7 @@ describe('auditLog', () => {
 
   beforeEach(() => seed(`${AUDIT_LOG}/entry1`, { ...entry, at: Timestamp.now() }));
 
-  // Role claims arrive in NKB-208; even a token claiming the top role must not touch the log.
+  // Role claims arrive in NKB-204; even a token claiming the top role must not touch the log.
   const primaryAdmin = () => env.authenticatedContext('efua', { role: 'primaryAdmin' }).firestore();
 
   it('cannot be edited or deleted from the app', async () => {
