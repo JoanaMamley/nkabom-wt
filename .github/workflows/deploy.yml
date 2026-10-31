@@ -1,0 +1,122 @@
+name: Deploy
+
+# Deploys one environment (NKB-121). Called from ci.yml once the CI check has passed: staging on a
+# merge to main, production on a v* tag after approval, and a Hosting preview channel on staging for
+# each pull request. Set-up is in the README, Continuous deployment.
+
+on:
+  workflow_call:
+    inputs:
+      environment:
+        description: staging or production
+        type: string
+        required: true
+      pull-request:
+        description: For a preview, the pull request's number; then only Hosting is deployed.
+        type: number
+        required: false
+
+jobs:
+  deploy:
+    name: ${{ inputs.pull-request && 'Preview' || inputs.environment }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    # The environment holds the secrets and settings, and for production asks for approval first.
+    environment:
+      name: ${{ inputs.environment }}
+      url: ${{ steps.deploy.outputs.url }}
+    # One deploy at a time per environment; a newer one waits rather than cancelling a running one.
+    concurrency:
+      group: deploy-${{ inputs.environment }}-${{ inputs.pull-request || 'live' }}
+      cancel-in-progress: false
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+          # Production needs main's history to check the tag is on it. Strings, because a 0 would
+          # count as false and fall through to the 1.
+          fetch-depth: ${{ inputs.environment == 'production' && '0' || '1' }}
+
+      - name: Check the tag is on main
+        if: inputs.environment == 'production'
+        run: |
+          git fetch --no-tags origin main
+          if ! git merge-base --is-ancestor "$GITHUB_SHA" origin/main; then
+            echo "::error::$GITHUB_REF_NAME is not on main. Tag a commit from main to release it."
+            exit 1
+          fi
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+          cache: npm
+      # Also installs the Worker's packages (postinstall).
+      - run: npm ci
+
+      - name: Write the Firebase web config
+        run: node scripts/write-environment.mjs "$ENVIRONMENT"
+        env:
+          ENVIRONMENT: ${{ inputs.environment }}
+          FIREBASE_WEB_CONFIG: ${{ secrets.FIREBASE_WEB_CONFIG }}
+      - name: Build
+        run: npm run ${{ inputs.environment == 'production' && 'build' || 'build:staging' }}
+
+      # Keyless: GitHub's token for this job is exchanged for a short-lived Google one, through
+      # the project's Workload Identity Federation provider. Nothing is stored in GitHub.
+      - uses: google-github-actions/auth@v3
+        with:
+          workload_identity_provider: ${{ vars.GCP_WORKLOAD_IDENTITY_PROVIDER }}
+          service_account: ${{ vars.GCP_SERVICE_ACCOUNT }}
+
+      - name: Deploy a preview channel
+        if: inputs.pull-request
+        id: preview
+        run: |
+          npx firebase hosting:channel:deploy "pr-$PULL_REQUEST" --expires 7d \
+            --project "$ENVIRONMENT" --non-interactive --json > channel.json
+          echo "url=$(jq -r '.result[].url' channel.json)" >> "$GITHUB_OUTPUT"
+        env:
+          ENVIRONMENT: ${{ inputs.environment }}
+          PULL_REQUEST: ${{ inputs.pull-request }}
+
+      # Firestore rules and indexes first, then the Worker, then the app, so a new version of the
+      # app never runs against older rules or an older API.
+      - name: Deploy Firestore rules and indexes
+        if: ${{ !inputs.pull-request }}
+        run: npx firebase deploy --only firestore --project "$ENVIRONMENT" --non-interactive
+        env:
+          ENVIRONMENT: ${{ inputs.environment }}
+      - name: Deploy the Worker
+        if: ${{ !inputs.pull-request }}
+        run: npm --prefix worker run "deploy:$ENVIRONMENT"
+        env:
+          ENVIRONMENT: ${{ inputs.environment }}
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ vars.CLOUDFLARE_ACCOUNT_ID }}
+      - name: Deploy Hosting
+        if: ${{ !inputs.pull-request }}
+        run: npx firebase deploy --only hosting --project "$ENVIRONMENT" --non-interactive
+        env:
+          ENVIRONMENT: ${{ inputs.environment }}
+
+      - name: Record the address
+        id: deploy
+        run: |
+          if [ -n "$PREVIEW_URL" ]; then
+            echo "url=$PREVIEW_URL" >> "$GITHUB_OUTPUT"
+          else
+            echo "url=https://$PROJECT.web.app" >> "$GITHUB_OUTPUT"
+          fi
+        env:
+          PREVIEW_URL: ${{ steps.preview.outputs.url }}
+          PROJECT: ${{ inputs.environment == 'production' && 'nkabom-prod' || 'nkabom-staging' }}
+
+      - name: Comment the preview address on the pull request
+        if: inputs.pull-request
+        run: |
+          gh pr comment "$PULL_REQUEST" --repo "$GITHUB_REPOSITORY" --edit-last --create-if-none \
+            --body "Preview of this pull request against staging, for 7 days: $PREVIEW_URL"
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PULL_REQUEST: ${{ inputs.pull-request }}
+          PREVIEW_URL: ${{ steps.preview.outputs.url }}

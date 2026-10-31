@@ -123,5 +123,6 @@ That completes NKB-113. The rest of the set-up comes with the stories that need 
 - **NKB-116:** follow [Setting up Gmail](../../README.md#setting-up-gmail) in the README: make an app password for each environment and set it, with the account's address, as Worker secrets.
 - **NKB-118:** create the job queues ([Setting up the queues](../../README.md#setting-up-the-queues) in the README), then check the scheduled triggers run on staging.
 - **NKB-119:** test a backup restore, then record it in the README.
+- **NKB-121:** follow [Setting up deploys](../../README.md#setting-up-deploys) in the README: run the Workload Identity Federation script in Cloud Shell for each project, make the Cloudflare API token, and add the GitHub environments, secrets and variables.
 
 For the restore test, staging needs some data first: add a few documents in the Firebase console under **Firestore**, or a test user under **Authentication > Users > Add user** once NKB-117 creates user records.

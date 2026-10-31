@@ -4,6 +4,8 @@ on:
   pull_request:
   push:
     branches: [main]
+    # A release: v1.0.0 and so on, tagged on main, deploys to production after approval.
+    tags: ['v*']
 
 permissions:
   contents: read
@@ -90,3 +92,43 @@ jobs:
           [ "${{ needs.frontend.result }}" = success ]
           && [ "${{ needs.worker.result }}" = success ]
           && [ "${{ needs.rules.result }}" = success ]
+
+  # Deploys (NKB-121), each only once the CI check above has passed. See deploy.yml.
+  staging:
+    name: Deploy staging
+    needs: ci
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    permissions:
+      contents: read
+      id-token: write
+    uses: ./.github/workflows/deploy.yml
+    with:
+      environment: staging
+    secrets: inherit
+
+  production:
+    name: Deploy production
+    needs: ci
+    if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v')
+    permissions:
+      contents: read
+      id-token: write
+    uses: ./.github/workflows/deploy.yml
+    with:
+      environment: production
+    secrets: inherit
+
+  # Pull requests from forks get no secrets, so only this repository's own branches get a preview.
+  preview:
+    name: Deploy preview
+    needs: ci
+    if: github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository
+    permissions:
+      contents: read
+      id-token: write
+      pull-requests: write
+    uses: ./.github/workflows/deploy.yml
+    with:
+      environment: staging
+      pull-request: ${{ github.event.pull_request.number }}
+    secrets: inherit
