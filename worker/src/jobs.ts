@@ -12,16 +12,6 @@ export { continueTask, type JobMessage, type Task } from './tasks';
 // each task in its own invocation, so tasks get their own time and subrequest limits, and one
 // failing does not stop the others; a failed task is tried again with growing delays.
 
-/** Sample task: does nothing but succeed, or fail when SAMPLE_TASK_FAIL is "true". Removed after the staging check. */
-export const sampleTask: Task = {
-  name: 'sample',
-  async run(env) {
-    if (env.SAMPLE_TASK_FAIL === 'true') {
-      throw new Error('Sample task failed on purpose (SAMPLE_TASK_FAIL is true)');
-    }
-  },
-};
-
 /**
  * The tasks each trigger runs. Cron times are UTC, which is also Ghana time. Each cron must match
  * the triggers in wrangler.jsonc. Daily tasks (backups, NKB-308, NKB-512, NKB-707) go in
@@ -29,8 +19,9 @@ export const sampleTask: Task = {
  * account's 10,000 queue operations a day, about 860 a day per frequent task in each environment.
  */
 export const SCHEDULES = {
-  daily: { cron: '0 2 * * *', tasks: [sampleTask, backupTask] },
-  frequent: { cron: '*/5 * * * *', tasks: [sampleTask] },
+  daily: { cron: '0 2 * * *', tasks: [backupTask] as Task[] },
+  // Nothing needs it yet; a trigger with no tasks queues nothing, so it costs nothing.
+  frequent: { cron: '*/5 * * * *', tasks: [] as Task[] },
 } satisfies Record<string, { cron: string; tasks: Task[] }>;
 export type Schedule = keyof typeof SCHEDULES;
 
