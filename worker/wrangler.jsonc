@@ -41,7 +41,8 @@
       "name": "nkabom-api-staging",
       "vars": {
         "FIREBASE_PROJECT_ID": "nkabom-staging",
-        "ALLOWED_ORIGINS": "https://nkabom-staging.web.app,https://nkabom-staging.firebaseapp.com",
+        // The last entry allows Hosting preview channels, one per pull request (NKB-121).
+        "ALLOWED_ORIGINS": "https://nkabom-staging.web.app,https://nkabom-staging.firebaseapp.com,https://nkabom-staging--*.web.app",
         "APP_URL": "https://nkabom-staging.web.app",
         "EMAIL_PROVIDER": "gmail",
       },

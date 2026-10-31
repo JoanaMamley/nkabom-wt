@@ -60,7 +60,7 @@ Local work uses the `demo-nkabom` project ID, so no Firebase login or credential
 
 ## Continuous integration
 
-GitHub Actions runs [.github/workflows/ci.yml](.github/workflows/ci.yml) on every pull request and on every push to `main`:
+GitHub Actions runs [.github/workflows/ci.yml](.github/workflows/ci.yml) on every pull request, every push to `main` and every release tag:
 
 | Job      | Runs                                                                              |
 | -------- | --------------------------------------------------------------------------------- |
@@ -68,6 +68,8 @@ GitHub Actions runs [.github/workflows/ci.yml](.github/workflows/ci.yml) on ever
 | Worker   | Worker lint, Prettier check, type check, tests, and a dry-run build               |
 | Rules    | Firestore security rules tests against the emulator                               |
 | CI       | passes only if every job above passes                                             |
+
+The deploy jobs come after **CI** and run only if it passed (see [Continuous deployment](#continuous-deployment)). The Frontend job builds with the empty web config committed in `src/environments/`, so it needs no secrets.
 
 To stop a failing check from being merged, require the **CI** check in the branch protection (or ruleset) for `main`. It is the only check that needs listing, even when later stories add jobs.
 
@@ -79,10 +81,70 @@ npm run lint && npm run format:check && npm run check:contrast && npm test -- --
   && npm run test:rules
 ```
 
+## Continuous deployment
+
+Once the **CI** check has passed, [.github/workflows/ci.yml](.github/workflows/ci.yml) deploys through [.github/workflows/deploy.yml](.github/workflows/deploy.yml) (FR-8.2). A failed check skips every deploy.
+
+| When                                      | Deploys                                                                   | Where                                          |
+| ----------------------------------------- | ------------------------------------------------------------------------- | ---------------------------------------------- |
+| A merge (push) to `main`                  | Firestore rules and indexes, then the Worker, then Hosting                | Staging                                        |
+| A tag `v*`, such as `v1.0.0`, on `main`   | The same, once you approve it                                             | Production                                     |
+| A pull request from a branch of this repo | Hosting only, to a preview channel that lasts 7 days, linked in a comment | Staging, at `nkabom-staging--pr-{n}-….web.app` |
+
+Each deploy writes the Firebase web config into the app from the environment's secret ([scripts/write-environment.mjs](scripts/write-environment.mjs)), builds, then signs in to Google with Workload Identity Federation, so no Google key is stored anywhere, and to Cloudflare with an API token kept in GitHub. Deploys to one environment run one at a time. Hand deploys (`npm run deploy:staging`) still work as before.
+
+A preview shows the pull request's version of the app against staging's Firestore and Worker; rules and Worker changes in the pull request reach staging only when it is merged. Email and password sign-in works on a preview. Google sign-in (NKB-204) does not, since Firebase Auth accepts it only from listed domains and preview addresses change.
+
+### Releasing to production
+
+1. Check staging, which already runs what is on `main`.
+2. Tag the commit on `main` and push the tag:
+
+   ```sh
+   git switch main && git pull
+   git tag v1.0.0
+   git push origin v1.0.0
+   ```
+
+   Or on GitHub: **Releases > Draft a new release**, a new tag such as `v1.0.0` on `main`, then **Publish release**.
+
+3. CI runs on the tag, then **Deploy production** waits. In the run on the **Actions** tab, choose **Review deployments**, tick `production` and **Approve and deploy**. A tag on a commit that is not on `main` is refused.
+
+Number releases `vMAJOR.MINOR.PATCH`: the patch for fixes, the minor for new features.
+
+### Setting up deploys
+
+Once, signed in as the shared project accounts:
+
+1. **Google, for each project:** open the [Google Cloud console](https://console.cloud.google.com), choose the project, and open **Cloud Shell** (the `>_` button at the top right; it has `gcloud` and costs nothing). There, run:
+
+   ```sh
+   git clone https://github.com/JoanaMamley/nkabom-wt.git && cd nkabom-wt
+   scripts/setup-github-deploy.sh nkabom-staging
+   ```
+
+   Then the same with `nkabom-prod`. [scripts/setup-github-deploy.sh](scripts/setup-github-deploy.sh) makes a `github-deployer` service account with only the roles a deploy needs (Hosting, Firestore rules and indexes, and reading the project), and a Workload Identity Federation provider that trusts GitHub's tokens only from this repository and that environment: for production, only from a `v*` tag in the `production` environment. It prints `GCP_WORKLOAD_IDENTITY_PROVIDER` and `GCP_SERVICE_ACCOUNT` for step 3.
+
+2. **Cloudflare:** in the dashboard, **My Profile > API Tokens > Create Token**, use the **Edit Cloudflare Workers** template, and change it:
+   - add **Account > Queues > Edit**, which the deploy needs for the job queues;
+   - remove **Workers R2 Storage**, which is not used;
+   - **Account Resources:** only the shared account; **Zone Resources:** all zones (the Worker uses no zone, so nothing is reached through it).
+
+   Create it and copy the token: Cloudflare shows it once. The account ID is on **Workers & Pages**, on the right.
+
+3. **GitHub,** in the repository's **Settings**:
+   - **Environments > New environment** `staging`. Add the secret `FIREBASE_WEB_CONFIG`, the output of `node scripts/write-environment.mjs staging --print` run where your local `environment.staging.ts` has the real config, and the variables `GCP_WORKLOAD_IDENTITY_PROVIDER` and `GCP_SERVICE_ACCOUNT` printed in step 1 for `nkabom-staging`.
+   - **New environment** `production`: tick **Required reviewers** and add yourself, leave **Prevent self-review** off, and under **Deployment branches and tags** choose **Selected branches and tags** and add a tag rule `v*`. Then the same secret and variables, with `production` and `nkabom-prod`.
+   - **Secrets and variables > Actions:** the repository secret `CLOUDFLARE_API_TOKEN` and the repository variable `CLOUDFLARE_ACCOUNT_ID`, from step 2.
+
+To check it: merge a pull request and watch **Deploy staging** finish on the **Actions** tab, then open the staging app. A pull request gets its preview comment once CI passes.
+
+If a Google step fails with `PERMISSION_DENIED` for a permission the roles above do not give, add the role that has it to `ROLES` in the script, run it again, and re-run the job. If the Cloudflare step fails with an authentication error (code 10000), the token is missing a permission from step 2.
+
 ## Configuration and secrets
 
 - `src/environments/environment.development.ts` points the app at the emulators.
-- `src/environments/environment.ts` and `environment.staging.ts` hold the production and staging Firebase web config. The committed copies are empty: fill them in locally and keep them out of commits with `git update-index --skip-worktree src/environments/environment.ts src/environments/environment.staging.ts` (see [docs/handbook/account-setup.md](docs/handbook/account-setup.md)). Automated deploys will write them from GitHub secrets (NKB-121).
+- `src/environments/environment.ts` and `environment.staging.ts` hold the production and staging Firebase web config. The committed copies are empty: fill them in locally and keep them out of commits with `git update-index --skip-worktree src/environments/environment.ts src/environments/environment.staging.ts` (see [docs/handbook/account-setup.md](docs/handbook/account-setup.md)). CI builds with the empty copies; automated deploys write the real ones from GitHub secrets (see [Continuous deployment](#continuous-deployment)).
 - Server-side secrets (the Google service account key, the Gmail app password, the photo link key) never go in this repo. They are Worker secrets, set with `wrangler secret put` (see [Worker](#worker)). `.env*`, key files and service account JSON are git-ignored.
 - The Worker's settings are in [worker/wrangler.jsonc](worker/wrangler.jsonc), one block per environment.
 
@@ -96,7 +158,7 @@ npm run lint && npm run format:check && npm run check:contrast && npm test -- --
 
 Both real projects belong to the shared project Google account (NKB-113). They stay on the free Spark plan, which cannot be billed, so server code runs in a Cloudflare Worker on its free plan rather than in Cloud Functions: Cloud Functions, scheduled functions and Firestore exports all need the Blaze plan, which needs a card (NKB-114 to NKB-120). Because the default alias is the demo project, a bare `firebase deploy` fails instead of reaching a real project: always name one.
 
-Deploy by hand with `npm run deploy:staging` or `npm run deploy:production`. Each builds the app with that project's config and deploys Hosting, Firestore rules and indexes, and that environment's Worker together. Sign in first with `npx firebase login` and `npx wrangler login`, using the shared project accounts. Automated deploys come in NKB-121.
+Deploy by hand with `npm run deploy:staging` or `npm run deploy:production`. Each builds the app with that project's config and deploys Hosting, Firestore rules and indexes, and that environment's Worker together. Sign in first with `npx firebase login` and `npx wrangler login`, using the shared project accounts. Usually you do not need to: GitHub Actions deploys staging on every merge and production on a release (see [Continuous deployment](#continuous-deployment)).
 
 Firebase Hosting serves only HTTPS (FR-8.2): it redirects plain HTTP and sends a `Strict-Transport-Security` header itself, so `firebase.json` does not set one.
 
@@ -137,7 +199,7 @@ The photo endpoints are listed under [Photo storage](#photo-storage), and the ad
 
 Send the token as `Authorization: Bearer <ID token>`. Errors come back as `{ error }` with the status; an unexpected failure is a `500` whose details go only to the Worker's log, as `Request failed`.
 
-**CORS:** only the origins in `ALLOWED_ORIGINS` (the app's `web.app` and `firebaseapp.com` addresses, and `localhost:4200` locally) get CORS headers, for `GET`, `POST`, `PUT`, `PATCH` and `DELETE` with `Authorization` and `Content-Type`. Add a custom domain there if the app later gets one.
+**CORS:** only the origins in `ALLOWED_ORIGINS` (the app's `web.app` and `firebaseapp.com` addresses, staging's preview channels as `https://nkabom-staging--*.web.app`, and `localhost:4200` locally) get CORS headers, for `GET`, `POST`, `PUT`, `PATCH` and `DELETE` with `Authorization` and `Content-Type`. Add a custom domain there if the app later gets one.
 
 **Adding an endpoint:** add a case to `route` in [worker/src/index.ts](worker/src/index.ts), call `requireAccount` first (and `requireAdmin` from [worker/src/roles.ts](worker/src/roles.ts) for admin endpoints), and throw `HttpError` for answers such as `400` or `403`. Firestore helpers are in [worker/src/firestore.ts](worker/src/firestore.ts): `getDocument` for a single read, and `runTransaction` for any change, which reads with `tx.getAll`, adds writes with `tx.create`, `set`, `update` and `delete` (`SERVER_TIME` as a value stores the commit time), and commits them all or none. Firestore runs the function again if the transaction clashes with another, so keep side effects such as email outside it.
 

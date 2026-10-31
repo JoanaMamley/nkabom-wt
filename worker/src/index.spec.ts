@@ -182,11 +182,42 @@ describe('routing', () => {
 });
 
 describe('CORS', () => {
+  // Staging's origins, preview channels included, as in wrangler.jsonc.
+  const previewEnv = () =>
+    stagingEnv({
+      ALLOWED_ORIGINS:
+        'https://nkabom-staging.web.app,https://nkabom-staging.firebaseapp.com,https://nkabom-staging--*.web.app',
+    });
+
   it('allows the app’s origin', async () => {
     const response = await call('/health', { headers: { Origin: ORIGIN } });
 
     expect(response.headers.get('Access-Control-Allow-Origin')).toBe(ORIGIN);
     expect(response.headers.get('Vary')).toBe('Origin');
+  });
+
+  it.each([
+    'https://nkabom-staging--pr12-a1b2c3d4.web.app',
+    'https://nkabom-staging--main-0f9e8d7c.web.app',
+  ])('allows a staging preview channel, %s', async (origin) => {
+    const response = await call('/health', { headers: { Origin: origin } }, previewEnv());
+
+    expect(response.headers.get('Access-Control-Allow-Origin')).toBe(origin);
+  });
+
+  it.each([
+    'https://nkabom-staging--pr12.web.app.evil.example',
+    'https://evil.example/https://nkabom-staging--pr12.web.app',
+    'https://nkabom-staging--.web.app',
+    'https://nkabom-staging--pr12_x.web.app',
+    'https://nkabom-staging--PR12.web.app',
+    'http://nkabom-staging--pr12.web.app',
+    'https://nkabom-prod--pr12.web.app',
+    'https://nkabom-stagingxweb.app',
+  ])('refuses %s, which only looks like a preview channel', async (origin) => {
+    const response = await call('/health', { headers: { Origin: origin } }, previewEnv());
+
+    expect(response.headers.get('Access-Control-Allow-Origin')).toBeNull();
   });
 
   it('gives other origins no CORS headers', async () => {

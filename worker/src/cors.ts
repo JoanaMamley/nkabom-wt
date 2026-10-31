@@ -5,7 +5,20 @@ import type { Env } from './env';
 export function allowedOrigin(request: Request, env: Env): string | null {
   const origin = request.headers.get('Origin');
   const allowed = env.ALLOWED_ORIGINS.split(',').map((entry) => entry.trim());
-  return origin && allowed.includes(origin) ? origin : null;
+  return origin && allowed.some((entry) => originMatches(origin, entry)) ? origin : null;
+}
+
+// An entry is an exact origin, or one with a single * for a run of lowercase letters, digits and
+// hyphens, such as https://nkabom-staging--*.web.app for staging's Hosting preview channels
+// (NKB-121), which are named nkabom-staging--{channel}-{random}.web.app.
+function originMatches(origin: string, entry: string): boolean {
+  if (!entry.includes('*')) {
+    return origin === entry;
+  }
+  const [before, after] = entry
+    .split('*', 2)
+    .map((part) => part.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'));
+  return new RegExp(`^${before}[a-z0-9-]+${after}$`).test(origin);
 }
 
 export function preflight(request: Request, env: Env): Response {
