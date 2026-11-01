@@ -146,7 +146,7 @@ If a Google step fails with `PERMISSION_DENIED` for a permission the roles above
 ## Configuration and secrets
 
 - `src/environments/environment.development.ts` points the app at the emulators.
-- `src/environments/environment.ts` and `environment.staging.ts` hold the production and staging Firebase web config. The committed copies are empty: fill them in locally and keep them out of commits with `git update-index --skip-worktree src/environments/environment.ts src/environments/environment.staging.ts` (see [docs/handbook/account-setup.md](docs/handbook/account-setup.md)). CI builds with the empty copies; automated deploys write the real ones from GitHub secrets (see [Continuous deployment](#continuous-deployment)). The same local copies also hold `privacyContact`, the email address the privacy notice gives for questions about personal data (FR-1.14). It stays out of the repo with the rest, so the shared account's address is never committed ([docs/handbook/accounts.md](docs/handbook/accounts.md)); a build without it, such as CI's, tells people to contact the executives instead.
+- `src/environments/environment.ts` and `environment.staging.ts` hold the production and staging Firebase web config. The committed copies are empty: fill them in locally and keep them out of commits with `git update-index --skip-worktree src/environments/environment.ts src/environments/environment.staging.ts` (see [docs/handbook/account-setup.md](docs/handbook/account-setup.md)). CI builds with the empty copies; automated deploys write the real ones from GitHub secrets (see [Continuous deployment](#continuous-deployment)). Each also names its Worker as `apiUrl`, which is not secret, so the committed copies have it (the development copy points at `wrangler dev`). The same local copies also hold `privacyContact`, the email address the privacy notice gives for questions about personal data (FR-1.14). It stays out of the repo with the rest, so the shared account's address is never committed ([docs/handbook/accounts.md](docs/handbook/accounts.md)); a build without it, such as CI's, tells people to contact the executives instead.
 - Server-side secrets (the Google service account key, the Gmail app password, the photo link key) never go in this repo. They are Worker secrets, set with `wrangler secret put` (see [Worker](#worker)). `.env*`, key files and service account JSON are git-ignored.
 - The Worker's settings are in [worker/wrangler.jsonc](worker/wrangler.jsonc), one block per environment.
 
@@ -188,14 +188,16 @@ The app's API is one Cloudflare Worker per environment, on the free plan at its 
 
 Writes with side effects (registration, profile edits, approvals, admin changes, mentorship, publishing, exports) go through it; the app reads Firestore directly. The code is in [worker/src/](worker/src/).
 
-Every endpoint except `/health` and the signed photo links starts with `requireAccount` from [worker/src/users.ts](worker/src/users.ts), so admin routes are enforced on the server, not only hidden in the app (FR-1.11). It checks the caller's Firebase ID token (`requireUser` in [worker/src/auth.ts](worker/src/auth.ts)): the token must be signed by Google, issued for that environment's project, unexpired, and name a user; otherwise the answer is `401`. It then reads the caller's `users/{uid}` record for their role, and on a new account's first call creates that record as `member` (FR-1.5), so the app calls `GET /v1/me` straight after sign-up and every sign-in. The Worker reaches Firestore through its REST API, as the project's service account, which bypasses the Firestore rules the way the Admin SDK does.
+Every endpoint except `/health`, the signed photo links and the two email verification endpoints starts with `requireAccount` from [worker/src/users.ts](worker/src/users.ts), so admin routes are enforced on the server, not only hidden in the app (FR-1.11). It checks the caller's Firebase ID token (`requireUser` in [worker/src/auth.ts](worker/src/auth.ts)): the token must be signed by Google, issued for that environment's project, unexpired, and name a user; otherwise the answer is `401`. An account whose email address is not yet verified gets `403` (FR-1.2, see [Sign-up and email verification](#sign-up-and-email-verification)). It then reads the caller's `users/{uid}` record for their role, and on a new account's first call creates that record as `member` (FR-1.5), so the app calls `GET /v1/me` straight after sign-up and every sign-in. The Worker reaches Firestore through its REST API, as the project's service account, which bypasses the Firestore rules the way the Admin SDK does.
 
-| Endpoint                | Needs sign-in | Takes                      | Returns                                                      |
-| ----------------------- | ------------- | -------------------------- | ------------------------------------------------------------ |
-| `GET /health`           | No            |                            | `{ ok: true }`                                               |
-| `GET /v1/me`            | Yes           |                            | `{ uid, role }`, creating the `users` record on a first call |
-| `POST /v1/registration` | Yes           | Every profile detail       | `201` `{ status: "pending" }` (see [Profiles](#profiles))    |
-| `PATCH /v1/profile`     | Yes           | Any of the profile details | `204`                                                        |
+| Endpoint                      | Needs sign-in         | Takes                                 | Returns                                                      |
+| ----------------------------- | --------------------- | ------------------------------------- | ------------------------------------------------------------ |
+| `GET /health`                 | No                    |                                       | `{ ok: true }`                                               |
+| `GET /v1/me`                  | Yes                   |                                       | `{ uid, role }`, creating the `users` record on a first call |
+| `POST /v1/registration`       | Yes                   | Every profile detail                  | `201` `{ status: "pending" }` (see [Profiles](#profiles))    |
+| `PATCH /v1/profile`           | Yes                   | Any of the profile details            | `204`                                                        |
+| `POST /v1/email/verification` | Yes, not yet verified |                                       | `{ sentTo }`, after emailing a verification link             |
+| `POST /v1/email/verify`       | No                    | `{ uid, expires, sig }` from the link | `{ verified: true }`                                         |
 
 The photo endpoints are listed under [Photo storage](#photo-storage), and the admin test email under [Email](#email).
 
@@ -205,18 +207,28 @@ Send the token as `Authorization: Bearer <ID token>`. Errors come back as `{ err
 
 **Adding an endpoint:** add a case to `route` in [worker/src/index.ts](worker/src/index.ts), call `requireAccount` first (and `requireAdmin` from [worker/src/roles.ts](worker/src/roles.ts) for admin endpoints), and throw `HttpError` for answers such as `400` or `403`. Firestore helpers are in [worker/src/firestore.ts](worker/src/firestore.ts): `getDocument` for a single read, and `runTransaction` for any change, which reads with `tx.getAll`, adds writes with `tx.create`, `set`, `update` and `delete` (`SERVER_TIME` as a value stores the commit time), and commits them all or none. Firestore runs the function again if the transaction clashes with another, so keep side effects such as email outside it.
 
+### Sign-up and email verification
+
+Email sign-up (NKB-202, FR-1.1, FR-1.2) is at `/sign-up`. The app creates the Firebase Auth account, then calls `POST /v1/email/verification`, and the Worker emails a link from the `verifyEmail` template in [worker/src/email-templates.ts](worker/src/email-templates.ts) (FR-8.5). The link goes to the app's `/verify-email` page, which passes it to `POST /v1/email/verify`; the Worker checks it and marks the address verified through Firebase Auth's REST API ([worker/src/firebase-auth.ts](worker/src/firebase-auth.ts)). Code is in [worker/src/verification.ts](worker/src/verification.ts) and [src/app/sign-up/](src/app/sign-up/).
+
+- **The link** carries an HMAC-SHA256 signature over the user ID, the address it was sent to and its expiry, keyed by `PHOTO_LINK_KEY` like the photo links. It expires after 24 hours (`VERIFY_LINK_HOURS`), and stops working if the account's address changes. Opening it again after it worked is harmless.
+- **Until the address is verified,** `requireAccount` answers `403` and the Firestore rules give the account nothing, so it cannot log in to any part of the site.
+- **Resends** are limited to one a minute and 5 a day per account (`RESEND_SECONDS`, `MAX_EMAILS_PER_DAY`), recorded in `emailVerifications/{uid}`, so no one account can use up the shared Gmail allowance.
+- **Locally,** the email, link included, is written to the `wrangler dev` log (`EMAIL_PROVIDER` is `log`).
+- **Passwords** must be at least 8 characters in the app. Firebase's own minimum is 6; to enforce 8 on the server too, set it under **Authentication > Settings > Password policy** in each project (free).
+
 ### Settings and secrets
 
-| Name                          | Kind    | Value                                                                                            |
-| ----------------------------- | ------- | ------------------------------------------------------------------------------------------------ |
-| `FIREBASE_PROJECT_ID`         | setting | `nkabom-staging` or `nkabom-prod`; `demo-nkabom` locally                                         |
-| `ALLOWED_ORIGINS`             | setting | Origins allowed by CORS, comma-separated                                                         |
-| `FIRESTORE_EMULATOR_HOST`     | setting | Local only: the Firestore emulator                                                               |
-| `FIREBASE_AUTH_EMULATOR_HOST` | setting | Local only: the Auth emulator                                                                    |
-| `PHOTOS`, `BACKUPS`           | KV      | The environment's Workers KV namespaces for photos (NKB-115) and backups (NKB-119)               |
-| `GOOGLE_SERVICE_ACCOUNT`      | secret  | The project's Firebase service account key, the whole JSON file                                  |
-| `PHOTO_LINK_KEY`              | secret  | A random key that signs photo links; a fixed value locally (see [Photo storage](#photo-storage)) |
-| Email settings and secrets    |         | See [Email](#email)                                                                              |
+| Name                          | Kind    | Value                                                                                                                         |
+| ----------------------------- | ------- | ----------------------------------------------------------------------------------------------------------------------------- |
+| `FIREBASE_PROJECT_ID`         | setting | `nkabom-staging` or `nkabom-prod`; `demo-nkabom` locally                                                                      |
+| `ALLOWED_ORIGINS`             | setting | Origins allowed by CORS, comma-separated                                                                                      |
+| `FIRESTORE_EMULATOR_HOST`     | setting | Local only: the Firestore emulator                                                                                            |
+| `FIREBASE_AUTH_EMULATOR_HOST` | setting | Local only: the Auth emulator                                                                                                 |
+| `PHOTOS`, `BACKUPS`           | KV      | The environment's Workers KV namespaces for photos (NKB-115) and backups (NKB-119)                                            |
+| `GOOGLE_SERVICE_ACCOUNT`      | secret  | The project's Firebase service account key, the whole JSON file                                                               |
+| `PHOTO_LINK_KEY`              | secret  | A random key that signs photo links and email verification links; a fixed value locally (see [Photo storage](#photo-storage)) |
+| Email settings and secrets    |         | See [Email](#email)                                                                                                           |
 
 Settings and KV namespace IDs are in [worker/wrangler.jsonc](worker/wrangler.jsonc). The staging and production blocks do not inherit the local ones, so the emulator settings never reach a deployed Worker, and the Worker also accepts emulator tokens only for a `demo-` project. Secrets are set per environment with `npx wrangler secret put NAME --env staging` (or `production`), run in `worker/`; each one is stored encrypted by Cloudflare and cannot be read back. Worker secrets are free.
 
@@ -269,7 +281,7 @@ Once, in `worker/`, signed in as the shared project accounts (see [docs/handbook
    openssl rand -base64 32 | npx wrangler secret put PHOTO_LINK_KEY --env production
    ```
 
-   Changing it later only ends the photo links already handed out.
+   Changing it later only ends the photo and verification links already handed out.
 
 6. **Check staging** (see below).
 
@@ -348,7 +360,7 @@ The upload link accepts only a file of the declared type (JPG, PNG or WebP) and 
 
 Photos are resized in the browser to about 100 KB (NKB-302), so 1,000 members use about 100 MB of KV's free 1 GB. Each upload is one of KV's free 1,000 writes a day, a limit shared by both environments and the backups (NKB-119). KV is eventually consistent: a new photo can take up to a minute to appear outside the place it was uploaded from, so the app should show the file it just uploaded rather than download it again.
 
-Locally, `wrangler dev` keeps photos in its local KV in `worker/.wrangler/`, and signs links with the `PHOTO_LINK_KEY` in `wrangler.jsonc`, so no secret is needed. Without `PHOTO_LINK_KEY`, both endpoints answer `503` ("Photo storage is not configured").
+Locally, `wrangler dev` keeps photos in its local KV in `worker/.wrangler/`, and signs links with the `PHOTO_LINK_KEY` in `wrangler.jsonc`, so no secret is needed. Without `PHOTO_LINK_KEY`, both endpoints answer `503` ("Signed links are not configured").
 
 ## Email
 

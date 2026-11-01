@@ -12,9 +12,18 @@
 //   node scripts/write-environment.mjs staging --print
 import { readFileSync, writeFileSync } from 'node:fs';
 
+// apiUrl is each environment's Worker (README, Worker). It is not secret, so it is set here.
 const TARGETS = {
-  staging: { file: 'src/environments/environment.staging.ts', projectId: 'nkabom-staging' },
-  production: { file: 'src/environments/environment.ts', projectId: 'nkabom-prod' },
+  staging: {
+    file: 'src/environments/environment.staging.ts',
+    projectId: 'nkabom-staging',
+    apiUrl: 'https://nkabom-api-staging.nkabomwt-project.workers.dev',
+  },
+  production: {
+    file: 'src/environments/environment.ts',
+    projectId: 'nkabom-prod',
+    apiUrl: 'https://nkabom-api-prod.nkabomwt-project.workers.dev',
+  },
 };
 const FIELDS = ['apiKey', 'authDomain', 'projectId', 'storageBucket', 'messagingSenderId', 'appId'];
 
@@ -73,6 +82,7 @@ function environmentFile(config, privacyContact) {
     'export const environment: Environment = {',
     '  production: true,',
     `  privacyContact: ${JSON.stringify(privacyContact)},`,
+    `  apiUrl: ${JSON.stringify(target.apiUrl)},`,
     '  firebase: {',
     ...fields,
     '  },',

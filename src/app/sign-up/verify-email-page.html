@@ -1,0 +1,33 @@
+<section class="page">
+  @switch (state()) {
+    @case ('verifying') {
+      <h1>Confirming your email address…</h1>
+    }
+    @case ('verified') {
+      <h1>Email address confirmed</h1>
+      @if (signedIn()) {
+        <p>Thank you. You can now carry on to Nkabom.</p>
+        <p><a routerLink="/" class="button primary">Continue</a></p>
+      } @else {
+        <p>Thank you. You can now log in to Nkabom.</p>
+      }
+    }
+    @case ('expired') {
+      <h1>This link has expired</h1>
+      @if (signedIn()) {
+        <p>Links work for 24 hours. Ask for a new one.</p>
+        <p><a routerLink="/check-email" class="button primary">Get a new link</a></p>
+      } @else {
+        <p>Links work for 24 hours. Log in to get a new one.</p>
+      }
+    }
+    @case ('invalid') {
+      <h1>This link is not valid</h1>
+      <p>Check you opened the whole link from the email, with nothing missing from the end.</p>
+    }
+    @case ('error') {
+      <h1>Your email address could not be confirmed</h1>
+      <p>Nkabom could not be reached. Check your connection and open the link again.</p>
+    }
+  }
+</section>

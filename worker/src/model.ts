@@ -7,6 +7,7 @@ export const MEMBERS = 'members';
 export const DIRECTORY = 'directory';
 export const AUDIT_LOG = 'auditLog';
 export const JOB_STATUS = 'jobStatus';
+export const EMAIL_VERIFICATIONS = 'emailVerifications';
 
 // FR-1.5: a Primary Admin is an admin who can also manage admin accounts.
 export const ROLES = ['member', 'admin', 'primaryAdmin'] as const;
@@ -143,4 +144,17 @@ export interface JobStatus {
   consecutiveFailures: number;
   /** When a Primary Admin was emailed about the current failures; null once a run succeeds. */
   alertedAt: Date | null;
+}
+
+/**
+ * emailVerifications/{uid}: when the account was last sent a verification email (NKB-202), to
+ * limit how often it can ask. Only the Worker reads and writes it.
+ */
+export interface EmailVerification {
+  /** Milliseconds since 1970, as Date.now() gives. */
+  lastSentAt: number;
+  /** The UTC day count applies to, as YYYY-MM-DD. */
+  day: string;
+  /** Emails sent on that day. */
+  count: number;
 }

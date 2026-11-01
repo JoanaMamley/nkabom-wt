@@ -1,0 +1,40 @@
+<section class="page">
+  <h1>Check your email</h1>
+
+  @if (loading()) {
+    <p>Loading…</p>
+  } @else if (email(); as address) {
+    <p>
+      We have sent a link to <strong>{{ address }}</strong
+      >. Open it to confirm your email address. The link expires in 24 hours. If you cannot find the
+      email, check your spam folder.
+    </p>
+
+    @if (verification.sendError(); as error) {
+      <p class="form-error" role="alert">The email could not be sent: {{ error }}</p>
+    }
+    @if (message(); as text) {
+      <p class="status" role="status">{{ text }}</p>
+    }
+
+    <div class="actions">
+      <button type="button" class="primary" [disabled]="busy()" (click)="continue()">
+        I have confirmed my email
+      </button>
+      <button type="button" [disabled]="busy()" (click)="resend()">Send another link</button>
+    </div>
+
+    <p>
+      Wrong address?
+      <button type="button" class="link" [disabled]="busy()" (click)="startAgain()">
+        Sign up again
+      </button>
+    </p>
+  } @else {
+    <p>
+      Open the link in the email we sent you to confirm your address. If it has expired, log in to
+      get a new one.
+    </p>
+    <p><a routerLink="/sign-up">Back to sign up</a></p>
+  }
+</section>

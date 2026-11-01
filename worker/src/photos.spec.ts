@@ -113,7 +113,7 @@ describe('POST /v1/photos/upload-url', () => {
     );
 
     expect(response.status).toBe(503);
-    expect(await response.json()).toEqual({ error: 'Photo storage is not configured' });
+    expect(await response.json()).toEqual({ error: 'Signed links are not configured' });
   });
 });
 

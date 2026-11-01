@@ -11,7 +11,7 @@ export interface Env {
   FIREBASE_AUTH_EMULATOR_HOST?: string;
   /** Secret: the Firebase service account key, as the JSON file Firebase gives. */
   GOOGLE_SERVICE_ACCOUNT?: string;
-  /** Secret: signs photo links (NKB-115). */
+  /** Secret: signs photo links (NKB-115) and email verification links (NKB-202). */
   PHOTO_LINK_KEY?: string;
   /** The app's address, for links in emails. */
   APP_URL: string;
