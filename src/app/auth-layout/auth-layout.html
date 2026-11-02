@@ -1,0 +1,69 @@
+<div class="auth">
+  <div class="card">
+    <div class="brand">
+      <!-- Decoration only: shapes in the brand colours. -->
+      <svg
+        class="art"
+        viewBox="0 0 600 800"
+        preserveAspectRatio="xMidYMid slice"
+        aria-hidden="true"
+        focusable="false"
+      >
+        <defs>
+          <linearGradient id="auth-circle-light" x1="0" y1="0" x2="1" y2="1">
+            <stop offset="0" stop-color="#ff8c4d" />
+            <stop offset="1" stop-color="#e95300" />
+          </linearGradient>
+          <linearGradient id="auth-circle-deep" x1="0" y1="0" x2="1" y2="1">
+            <stop offset="0" stop-color="#e95300" />
+            <stop offset="1" stop-color="#8f3300" />
+          </linearGradient>
+        </defs>
+        <path
+          d="M0 0H600V170C520 250 400 190 300 240C200 290 110 190 0 250Z"
+          fill="#e95300"
+          opacity="0.45"
+        />
+        <path
+          d="M70 310C150 190 360 210 450 300C530 380 600 340 600 340V620C480 560 360 640 240 600C120 560 30 480 70 310Z"
+          fill="#ff8c4d"
+          opacity="0.22"
+        />
+        <path
+          d="M0 520C120 470 220 560 330 520C440 480 520 430 600 470V800H0Z"
+          fill="#a63b00"
+          opacity="0.55"
+        />
+        <circle cx="210" cy="190" r="62" fill="url(#auth-circle-light)" opacity="0.9" />
+        <circle cx="160" cy="610" r="84" fill="url(#auth-circle-deep)" />
+        <circle cx="520" cy="650" r="32" fill="url(#auth-circle-light)" opacity="0.85" />
+      </svg>
+
+      <div class="brand-text">
+        <p class="name">Nkabom</p>
+        <p class="tagline">{{ tagline() }}</p>
+      </div>
+
+      <svg
+        class="wave"
+        viewBox="0 0 600 120"
+        preserveAspectRatio="none"
+        aria-hidden="true"
+        focusable="false"
+      >
+        <path d="M0 60C140 0 300 120 450 55C520 25 570 35 600 45V120H0Z" />
+      </svg>
+      <p class="community">The WomenTrust alumnae community</p>
+    </div>
+
+    <div class="panel">
+      <div class="panel-top">
+        <app-theme-toggle />
+      </div>
+      <div class="panel-body">
+        <ng-content />
+      </div>
+      <p class="panel-footer"><a routerLink="/privacy">Privacy notice</a></p>
+    </div>
+  </div>
+</div>

@@ -1,7 +1,8 @@
 import { Component, inject, signal } from '@angular/core';
 import { NonNullableFormBuilder, ReactiveFormsModule, Validators } from '@angular/forms';
-import { Router } from '@angular/router';
+import { Router, RouterLink } from '@angular/router';
 
+import { AuthLayout } from '../auth-layout/auth-layout';
 import { Accounts } from '../core/accounts';
 import { PrivacySummary } from '../privacy/privacy-summary';
 import { Verification } from './verification';
@@ -26,7 +27,7 @@ const SIGN_UP_ERRORS: Record<string, string> = {
  */
 @Component({
   selector: 'app-sign-up-page',
-  imports: [ReactiveFormsModule, PrivacySummary],
+  imports: [AuthLayout, ReactiveFormsModule, PrivacySummary, RouterLink],
   templateUrl: './sign-up-page.html',
   styleUrl: './sign-up-page.scss',
 })

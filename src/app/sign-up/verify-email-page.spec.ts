@@ -1,7 +1,9 @@
+import { signal } from '@angular/core';
 import { TestBed } from '@angular/core/testing';
 import { ActivatedRoute, convertToParamMap, provideRouter } from '@angular/router';
 
 import { Accounts } from '../core/accounts';
+import { Theme } from '../core/theme';
 import { Api, ApiError } from '../core/api';
 import { VerifyEmailPage } from './verify-email-page';
 
@@ -21,6 +23,7 @@ describe('VerifyEmailPage', () => {
       imports: [VerifyEmailPage],
       providers: [
         provideRouter([]),
+        { provide: Theme, useValue: { mode: signal('light'), toggle: vi.fn() } },
         { provide: Api, useValue: api },
         { provide: Accounts, useValue: { currentUser: async () => user } },
         {

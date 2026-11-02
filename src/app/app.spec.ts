@@ -4,8 +4,10 @@ import { provideRouter, Router } from '@angular/router';
 import { provideServiceWorker } from '@angular/service-worker';
 import { App } from './app';
 import { routes } from './app.routes';
+import { Accounts } from './core/accounts';
 import { AppUpdates } from './core/app-updates';
 import { Connectivity } from './core/connectivity';
+import { FIREBASE_AUTH } from './core/firebase';
 import { Theme } from './core/theme';
 
 describe('App', () => {
@@ -25,6 +27,9 @@ describe('App', () => {
         { provide: Connectivity, useValue: { online } },
         { provide: AppUpdates, useValue: updates },
         { provide: Theme, useValue: { mode: signal('light'), toggle: vi.fn() } },
+        // Signed out.
+        { provide: Accounts, useValue: { currentUser: async () => null } },
+        { provide: FIREBASE_AUTH, useValue: { currentUser: null } },
       ],
     }).compileComponents();
   });
@@ -42,13 +47,26 @@ describe('App', () => {
     expect(app).toBeTruthy();
   });
 
-  it('should render title', async () => {
+  it('opens on the login page', async () => {
     const compiled = await render();
-    expect(compiled.querySelector('h1')?.textContent).toContain('Nkabom');
+
+    expect(TestBed.inject(Router).url).toBe('/login');
+    expect(compiled.querySelector('main h1')?.textContent).toContain('Log in');
+  });
+
+  it('gives the login page the whole screen, with its own toggle and privacy link', async () => {
+    const compiled = await render('/login');
+
+    expect(compiled.querySelector('header')).toBeNull();
+    expect(compiled.querySelector('footer')).toBeNull();
+    expect(compiled.querySelector('app-auth-layout app-theme-toggle button')).not.toBeNull();
+    expect(compiled.querySelector('app-auth-layout a[href="/privacy"]')?.textContent).toContain(
+      'Privacy notice',
+    );
   });
 
   it('links to the privacy notice from the footer (FR-1.13)', async () => {
-    const compiled = await render();
+    const compiled = await render('/privacy');
 
     const link = compiled.querySelector<HTMLAnchorElement>('footer a');
     expect(link?.textContent).toContain('Privacy notice');

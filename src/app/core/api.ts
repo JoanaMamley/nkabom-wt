@@ -24,7 +24,15 @@ export class Api {
   private readonly auth = inject(FIREBASE_AUTH);
   private readonly url = inject(API_URL);
 
-  async post<T>(path: string, body: unknown = {}): Promise<T> {
+  get<T>(path: string): Promise<T> {
+    return this.request<T>('GET', path);
+  }
+
+  post<T>(path: string, body: unknown = {}): Promise<T> {
+    return this.request<T>('POST', path, JSON.stringify(body));
+  }
+
+  private async request<T>(method: string, path: string, body?: string): Promise<T> {
     const headers: Record<string, string> = { 'Content-Type': 'application/json' };
     const user = this.auth.currentUser;
     if (user) {
@@ -33,11 +41,7 @@ export class Api {
 
     let response: Response;
     try {
-      response = await fetch(`${this.url}${path}`, {
-        method: 'POST',
-        headers,
-        body: JSON.stringify(body),
-      });
+      response = await fetch(`${this.url}${path}`, { method, headers, body });
     } catch {
       throw new ApiError(0, 'Nkabom could not be reached. Check your connection and try again.');
     }

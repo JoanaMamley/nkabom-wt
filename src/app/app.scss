@@ -9,6 +9,10 @@
 
 main {
   padding: 0 1rem;
+
+  &.full-screen {
+    padding: 0;
+  }
 }
 
 .app-footer {

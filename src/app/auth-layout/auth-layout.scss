@@ -1,0 +1,146 @@
+// Two columns from tablet width up; below that the art becomes a banner above the form.
+$wide: 48rem;
+
+.auth {
+  box-sizing: border-box;
+  display: grid;
+  place-items: center;
+  min-height: 100dvh;
+  background: var(--color-surface);
+
+  @media (min-width: $wide) {
+    padding: 2rem;
+  }
+}
+
+.card {
+  position: relative;
+  display: grid;
+  width: 100%;
+  min-height: 100dvh;
+  background: var(--color-bg);
+
+  @media (min-width: $wide) {
+    grid-template-columns: 1.1fr 1fr;
+    max-width: 64rem;
+    min-height: 36rem;
+    border-radius: 1rem;
+    overflow: hidden;
+    box-shadow: 0 1.5rem 3rem rgb(0 0 0 / 0.18);
+  }
+
+  @media (max-width: calc($wide - 1px)) {
+    grid-template-rows: auto 1fr;
+  }
+}
+
+.brand {
+  // The wave below the art takes the colour of what is under it.
+  --wave: var(--color-bg);
+  position: relative;
+  display: grid;
+  place-items: center;
+  min-height: 12rem;
+  overflow: hidden;
+  background: linear-gradient(160deg, var(--color-brand-from), var(--color-brand-to));
+  color: var(--color-on-brand);
+
+  @media (min-width: $wide) {
+    --wave: var(--color-surface);
+    min-height: auto;
+  }
+}
+
+.art {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+}
+
+.brand-text {
+  position: relative;
+  padding: 1rem 1rem 2.5rem;
+  text-align: center;
+
+  @media (min-width: $wide) {
+    padding-bottom: 6rem;
+  }
+}
+
+.name {
+  margin: 0;
+  font-size: clamp(2.25rem, 6vw, 3.5rem);
+  font-weight: 500;
+  line-height: 1.1;
+}
+
+.tagline {
+  margin: 0.75rem 0 0;
+  font-size: 0.875rem;
+  letter-spacing: 0.12em;
+}
+
+.wave {
+  position: absolute;
+  inset: auto 0 0;
+  width: 100%;
+  height: 2.5rem;
+  fill: var(--wave);
+
+  @media (min-width: $wide) {
+    height: 7rem;
+  }
+}
+
+.community {
+  display: none;
+
+  @media (min-width: $wide) {
+    position: absolute;
+    inset: auto 0 1.25rem;
+    display: block;
+    margin: 0;
+    color: var(--color-text);
+    font-size: 0.75rem;
+    font-weight: 600;
+    letter-spacing: 0.2em;
+    text-align: center;
+    text-transform: uppercase;
+  }
+}
+
+.panel {
+  display: flex;
+  flex-direction: column;
+  padding: 0.5rem 1rem 1rem;
+
+  @media (min-width: $wide) {
+    padding: 1rem 2.5rem 1.5rem;
+  }
+}
+
+.panel-top {
+  display: flex;
+  justify-content: flex-end;
+
+  // On phones the toggle sits on the banner's corner, so the form starts higher.
+  @media (max-width: calc($wide - 1px)) {
+    position: absolute;
+    top: 0.75rem;
+    right: 0.75rem;
+  }
+}
+
+.panel-body {
+  flex: 1;
+  width: 100%;
+  max-width: 24rem;
+  margin: 0 auto;
+}
+
+.panel-footer {
+  margin: 1.5rem 0 0;
+  font-size: 0.875rem;
+  text-align: center;
+}

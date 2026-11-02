@@ -1,10 +1,28 @@
-import { Component } from '@angular/core';
-import { RouterLink } from '@angular/router';
+import { Component, inject, OnInit, signal } from '@angular/core';
+import { Router } from '@angular/router';
 
-/** The landing page, until login (NKB-205) and the member dashboard replace it. */
+import { Accounts } from '../core/accounts';
+
+/**
+ * Where a logged-in member lands, until the registration form (NKB-301) and the member pages
+ * replace it.
+ */
 @Component({
   selector: 'app-home-page',
-  imports: [RouterLink],
   templateUrl: './home-page.html',
 })
-export class HomePage {}
+export class HomePage implements OnInit {
+  private readonly accounts = inject(Accounts);
+  private readonly router = inject(Router);
+
+  protected readonly email = signal<string | null>(null);
+
+  async ngOnInit(): Promise<void> {
+    this.email.set((await this.accounts.currentUser())?.email ?? null);
+  }
+
+  protected async logOut(): Promise<void> {
+    await this.accounts.signOut();
+    await this.router.navigateByUrl('/login');
+  }
+}
