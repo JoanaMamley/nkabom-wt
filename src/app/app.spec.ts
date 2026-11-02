@@ -65,6 +65,13 @@ describe('App', () => {
     );
   });
 
+  it('shows no header before the first page is chosen, so login does not flash it', () => {
+    const fixture = TestBed.createComponent(App);
+    fixture.detectChanges();
+
+    expect((fixture.nativeElement as HTMLElement).querySelector('header')).toBeNull();
+  });
+
   it('links to the privacy notice from the footer (FR-1.13)', async () => {
     const compiled = await render('/privacy');
 

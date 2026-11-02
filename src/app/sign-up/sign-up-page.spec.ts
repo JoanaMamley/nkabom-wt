@@ -84,6 +84,14 @@ describe('SignUpPage', () => {
     expect(accounts.signUp).not.toHaveBeenCalled();
   });
 
+  it('has an eye button to show the password', async () => {
+    const { page } = await render();
+
+    page.querySelector<HTMLButtonElement>('app-reveal-password button')!.click();
+
+    expect(page.querySelector<HTMLInputElement>('#password')!.type).toBe('text');
+  });
+
   it('explains a Firebase error in plain words', async () => {
     accounts.signUp.mockRejectedValue({ code: 'auth/email-already-in-use' });
     const { page, fill } = await render();

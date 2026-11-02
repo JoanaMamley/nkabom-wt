@@ -5,11 +5,17 @@ import { Router, RouterLink } from '@angular/router';
 import { AuthLayout } from '../auth-layout/auth-layout';
 import { Accounts } from '../core/accounts';
 import { Api, ApiError } from '../core/api';
+import { RevealPassword } from '../reveal-password/reveal-password';
+import { Verification } from '../sign-up/verification';
 
 // Firebase Auth's error codes, in words a member can act on. Wrong email and wrong password get
 // the same answer, so the page does not reveal which addresses have accounts.
 const LOGIN_ERRORS: Record<string, string> = {
+  // Projects with email enumeration protection (staging and production) answer invalid-credential
+  // for both; the emulator still answers user-not-found or wrong-password.
   'auth/invalid-credential': 'The email address or password is not right.',
+  'auth/user-not-found': 'The email address or password is not right.',
+  'auth/wrong-password': 'The email address or password is not right.',
   'auth/invalid-email': 'Enter a valid email address.',
   'auth/user-disabled': 'This account has been turned off. Please contact the executives.',
   'auth/network-request-failed':
@@ -29,7 +35,7 @@ export function greeting(hour: number): string {
  */
 @Component({
   selector: 'app-login-page',
-  imports: [AuthLayout, ReactiveFormsModule, RouterLink],
+  imports: [AuthLayout, RevealPassword, ReactiveFormsModule, RouterLink],
   templateUrl: './login-page.html',
   styleUrl: './login-page.scss',
 })
@@ -37,6 +43,7 @@ export class LoginPage {
   private readonly accounts = inject(Accounts);
   private readonly api = inject(Api);
   private readonly router = inject(Router);
+  private readonly verification = inject(Verification);
 
   protected readonly greeting = greeting(new Date().getHours());
   protected readonly form = inject(NonNullableFormBuilder).group({
@@ -60,6 +67,8 @@ export class LoginPage {
     try {
       const user = await this.accounts.logIn(email.trim(), password, remember);
       if (!user.emailVerified) {
+        // No email was sent this time, so an error from an earlier send must not show.
+        this.verification.sendError.set(null);
         await this.router.navigateByUrl('/check-email');
         return;
       }

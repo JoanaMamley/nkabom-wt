@@ -1,6 +1,13 @@
 import { Component, inject } from '@angular/core';
 import { toSignal } from '@angular/core/rxjs-interop';
-import { ActivatedRoute, NavigationEnd, Router, RouterLink, RouterOutlet } from '@angular/router';
+import {
+  ActivatedRoute,
+  NavigationEnd,
+  NavigationError,
+  Router,
+  RouterLink,
+  RouterOutlet,
+} from '@angular/router';
 import { filter, map } from 'rxjs';
 
 import { AppUpdates } from './core/app-updates';
@@ -24,7 +31,8 @@ export class App {
   /** Whether the page brings its own layout (route data fullScreen), so the header and footer hide. */
   protected readonly fullScreen = toSignal(
     this.router.events.pipe(
-      filter((event) => event instanceof NavigationEnd),
+      // After an error (such as an unknown address) the header comes back too.
+      filter((event) => event instanceof NavigationEnd || event instanceof NavigationError),
       map(() => {
         let route = this.route.snapshot;
         while (route.firstChild) {
@@ -33,6 +41,8 @@ export class App {
         return route.data['fullScreen'] === true;
       }),
     ),
-    { initialValue: false },
+    // Hidden until the first page is chosen, so the header does not flash on the login page while
+    // Firebase restores any saved sign-in.
+    { initialValue: true },
   );
 }

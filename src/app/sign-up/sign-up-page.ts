@@ -5,6 +5,7 @@ import { Router, RouterLink } from '@angular/router';
 import { AuthLayout } from '../auth-layout/auth-layout';
 import { Accounts } from '../core/accounts';
 import { PrivacySummary } from '../privacy/privacy-summary';
+import { RevealPassword } from '../reveal-password/reveal-password';
 import { Verification } from './verification';
 
 /** The shortest password allowed. Firebase's own minimum is 6. */
@@ -27,7 +28,7 @@ const SIGN_UP_ERRORS: Record<string, string> = {
  */
 @Component({
   selector: 'app-sign-up-page',
-  imports: [AuthLayout, ReactiveFormsModule, PrivacySummary, RouterLink],
+  imports: [AuthLayout, RevealPassword, ReactiveFormsModule, PrivacySummary, RouterLink],
   templateUrl: './sign-up-page.html',
   styleUrl: './sign-up-page.scss',
 })

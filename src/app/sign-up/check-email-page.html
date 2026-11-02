@@ -11,7 +11,7 @@
     </p>
 
     @if (verification.sendError(); as error) {
-      <p class="form-error" role="alert">The email could not be sent: {{ error }}</p>
+      <p class="form-error" role="alert">{{ error }}</p>
     }
     @if (message(); as text) {
       <p class="status" role="status">{{ text }}</p>
