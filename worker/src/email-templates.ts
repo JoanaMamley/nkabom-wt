@@ -21,6 +21,18 @@ export interface RenderedEmail {
 // Admin emails carry the member's name and a link only, never date of birth or other profile
 // details (FR-4.13).
 export const EMAIL_TEMPLATES = {
+  /** FR-1.2: a new email sign-up confirms their address before the account is active. */
+  verifyEmail: (data: { link: string; expiresInHours: number }) => ({
+    subject: 'Confirm your email address for Nkabom',
+    greeting: 'Hello,',
+    paragraphs: [
+      'Thank you for signing up to Nkabom, the WomenTrust alumnae community.',
+      `Confirm your email address with the link below. It expires in ${hours(data.expiresInHours)}.`,
+      'If you did not sign up, you can ignore this email.',
+    ],
+    action: { label: 'Confirm my email address', url: data.link },
+  }),
+
   /** FR-1.8: a new admin sets their password with a one-time, expiring link. */
   adminInvite: (data: { name: string; link: string; expiresInHours: number }) => ({
     subject: 'Set your password for Nkabom',

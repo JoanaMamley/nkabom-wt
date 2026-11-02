@@ -1,0 +1,46 @@
+<section class="page">
+  <h1>Sign up</h1>
+  <p>Join Nkabom, the WomenTrust alumnae community.</p>
+
+  <form [formGroup]="form" (ngSubmit)="submit()" novalidate>
+    <div class="field">
+      <label for="email">Email address</label>
+      <input
+        id="email"
+        type="email"
+        formControlName="email"
+        autocomplete="email"
+        [attr.aria-invalid]="invalid('email')"
+        [attr.aria-describedby]="invalid('email') ? 'email-error' : null"
+      />
+      @if (invalid('email')) {
+        <p id="email-error" class="field-error">Enter a valid email address.</p>
+      }
+    </div>
+
+    <div class="field">
+      <label for="password">Password</label>
+      <input
+        id="password"
+        type="password"
+        formControlName="password"
+        autocomplete="new-password"
+        [attr.aria-invalid]="invalid('password')"
+        aria-describedby="password-hint"
+      />
+      <p id="password-hint" class="hint" [class.field-error]="invalid('password')">
+        At least {{ minPasswordLength }} characters.
+      </p>
+    </div>
+
+    @if (error(); as message) {
+      <p class="form-error" role="alert">{{ message }}</p>
+    }
+
+    <button type="submit" class="primary" [disabled]="busy()">
+      {{ busy() ? 'Signing up…' : 'Sign up' }}
+    </button>
+  </form>
+
+  <app-privacy-summary />
+</section>

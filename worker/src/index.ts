@@ -6,10 +6,13 @@ import { type JobMessage, queueScheduledTasks, runJobMessages } from './jobs';
 import { editProfile, register } from './members';
 import { getPhotoDownloadUrl, getPhotoUploadUrl, servePhoto } from './photos';
 import { requireAdmin } from './roles';
+import { requireUser } from './auth';
 import { type Account, requireAccount } from './users';
+import { confirmVerification, sendVerificationEmail } from './verification';
 
 // The app's API (NKB-114). Writes with side effects go through here; the app reads Firestore
-// directly. Each endpoint except /health and the signed photo links starts with requireAccount.
+// directly. Each endpoint starts with requireAccount, except /health, the signed photo links and
+// the email verification endpoints (verification.ts).
 export default {
   async fetch(request, env): Promise<Response> {
     if (request.method === 'OPTIONS') {
@@ -53,6 +56,14 @@ async function route(request: Request, env: Env): Promise<Response> {
       const { uid, role } = await requireAccount(request, env);
       return json({ uid, role });
     }
+    case '/v1/email/verification':
+      // Before the address is verified, so it checks the sign-in only (verification.ts).
+      allow(request, 'POST');
+      return sendVerificationEmail(env, await requireUser(request, env));
+    case '/v1/email/verify':
+      // From the emailed link, which is the permission; no sign-in.
+      allow(request, 'POST');
+      return confirmVerification(request, env);
     case '/v1/registration':
       allow(request, 'POST');
       return register(request, env, await requireAccount(request, env));

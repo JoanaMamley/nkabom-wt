@@ -1,8 +1,7 @@
-import { base64url } from 'jose';
-
 import type { User } from './auth';
 import type { Env } from './env';
 import { HttpError, json, readJson } from './http';
+import { signLink, verifyLink } from './links';
 import { MAX_PHOTO_BYTES, PHOTO_TYPES, type PhotoType } from './model';
 
 // Member photos in the private PHOTOS Workers KV namespace (FR-2.3, FR-8.2). Nothing reads KV
@@ -82,7 +81,7 @@ export async function signUpload(
   now = Date.now(),
 ): Promise<string> {
   const expires = String(Math.floor(now / 1000) + UPLOAD_URL_SECONDS);
-  const sig = await sign(env, ['PUT', path, expires, contentType, String(size)]);
+  const sig = await signLink(env, ['PUT', path, expires, contentType, String(size)]);
   const query = new URLSearchParams({ expires, type: contentType, size: String(size), sig });
   return `${origin}/${path}?${query}`;
 }
@@ -95,7 +94,7 @@ export async function signDownload(
   now = Date.now(),
 ): Promise<string> {
   const expires = String(Math.floor(now / 1000) + DOWNLOAD_URL_SECONDS);
-  const sig = await sign(env, ['GET', path, expires]);
+  const sig = await signLink(env, ['GET', path, expires]);
   return `${origin}/${path}?${new URLSearchParams({ expires, sig })}`;
 }
 
@@ -116,7 +115,7 @@ export async function servePhoto(request: Request, env: Env): Promise<Response> 
   const size = query.get('size') ?? '';
   const parts =
     request.method === 'PUT' ? ['PUT', path, expires, type, size] : ['GET', path, expires];
-  if (!(await verify(env, parts, query.get('sig') ?? ''))) {
+  if (!(await verifyLink(env, parts, query.get('sig') ?? ''))) {
     throw new HttpError(403, 'Invalid photo link');
   }
   const remaining = Number(expires) - Math.floor(Date.now() / 1000);
@@ -157,38 +156,4 @@ export async function servePhoto(request: Request, env: Env): Promise<Response> 
 
 interface PhotoMetadata {
   contentType: string;
-}
-
-// HMAC-SHA256 over the link's parts, one per line, keyed by PHOTO_LINK_KEY.
-async function sign(env: Env, parts: string[]): Promise<string> {
-  const signature = await crypto.subtle.sign('HMAC', await linkKey(env), encode(parts));
-  return base64url.encode(new Uint8Array(signature));
-}
-
-async function verify(env: Env, parts: string[], sig: string): Promise<boolean> {
-  let signature: Uint8Array;
-  try {
-    signature = base64url.decode(sig);
-  } catch {
-    return false;
-  }
-  // crypto.subtle.verify compares in constant time.
-  return crypto.subtle.verify('HMAC', await linkKey(env), signature, encode(parts));
-}
-
-function encode(parts: string[]): Uint8Array {
-  return new TextEncoder().encode(parts.join('\n'));
-}
-
-function linkKey(env: Env): Promise<CryptoKey> {
-  if (!env.PHOTO_LINK_KEY) {
-    throw new HttpError(503, 'Photo storage is not configured');
-  }
-  return crypto.subtle.importKey(
-    'raw',
-    new TextEncoder().encode(env.PHOTO_LINK_KEY),
-    { name: 'HMAC', hash: 'SHA-256' },
-    false,
-    ['sign', 'verify'],
-  );
 }

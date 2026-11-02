@@ -1,6 +1,7 @@
 import { requireUser, type User } from './auth';
 import type { Env } from './env';
 import { commit, FirestoreError, getDocument, SERVER_TIME, WriteBatch } from './firestore';
+import { HttpError } from './http';
 import { USERS } from './model';
 
 /** The signed-in caller with the role from their users record. */
@@ -13,10 +14,14 @@ export interface Account extends User {
  * Every endpoint except the health check calls this first (FR-1.11). It checks the sign-in and
  * reads the caller's users record, so the role is current on every call and a removed admin loses
  * access at once. The first call from a new account creates its record as a member, which is why
- * the app calls GET /v1/me straight after sign-up.
+ * the app calls GET /v1/me straight after sign-up. An account whose email address is not yet
+ * verified is refused, so it cannot log in (FR-1.2, verification.ts).
  */
 export async function requireAccount(request: Request, env: Env): Promise<Account> {
   const user = await requireUser(request, env);
+  if (!user.emailVerified) {
+    throw new HttpError(403, 'Verify your email address first');
+  }
   return { ...user, role: await userRole(env, user) };
 }
 

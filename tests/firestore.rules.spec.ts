@@ -20,7 +20,14 @@ import {
 } from 'firebase/firestore';
 import { afterAll, beforeAll, beforeEach, describe, it } from 'vitest';
 
-import { AUDIT_LOG, DIRECTORY, JOB_STATUS, MEMBERS, USERS } from '../worker/src/model';
+import {
+  AUDIT_LOG,
+  DIRECTORY,
+  EMAIL_VERIFICATIONS,
+  JOB_STATUS,
+  MEMBERS,
+  USERS,
+} from '../worker/src/model';
 
 // Runs against the Firestore emulator: npm run test:rules starts it for the test run.
 let env: RulesTestEnvironment;
@@ -37,8 +44,9 @@ afterAll(() => env.cleanup());
 // Every test starts from an empty database, so each one creates its collections from scratch.
 beforeEach(() => env.clearFirestore());
 
-function as(uid: string) {
-  return env.authenticatedContext(uid).firestore();
+// A signed-in user whose email address is verified, as every account must be (NKB-202).
+function as(uid: string, claims: Record<string, unknown> = {}) {
+  return env.authenticatedContext(uid, { email_verified: true, ...claims }).firestore();
 }
 
 function photoOf(uid: string) {
@@ -209,7 +217,7 @@ describe('auditLog', () => {
   beforeEach(() => seed(`${AUDIT_LOG}/entry1`, { ...entry, at: Timestamp.now() }));
 
   // Role claims arrive in NKB-204; even a token claiming the top role must not touch the log.
-  const primaryAdmin = () => env.authenticatedContext('efua', { role: 'primaryAdmin' }).firestore();
+  const primaryAdmin = () => as('efua', { role: 'primaryAdmin' });
 
   it('cannot be edited or deleted from the app', async () => {
     const existing = doc(primaryAdmin(), AUDIT_LOG, 'entry1');
@@ -240,11 +248,44 @@ describe('jobStatus', () => {
   );
 
   it('cannot be read or written from the app, even by a Primary Admin', async () => {
-    const primaryAdmin = env.authenticatedContext('efua', { role: 'primaryAdmin' }).firestore();
+    const primaryAdmin = as('efua', { role: 'primaryAdmin' });
 
     await assertFails(getDoc(doc(primaryAdmin, JOB_STATUS, 'daily-sample')));
     await assertFails(updateDoc(doc(primaryAdmin, JOB_STATUS, 'daily-sample'), { status: 'ok' }));
     await assertFails(setDoc(doc(as('ama'), JOB_STATUS, 'frequent-sample'), { status: 'ok' }));
+  });
+});
+
+describe('emailVerifications', () => {
+  beforeEach(() =>
+    seed(`${EMAIL_VERIFICATIONS}/ama`, { lastSentAt: 0, day: '2026-10-31', count: 1 }),
+  );
+
+  it('cannot be read or written from the app, even by its own account', async () => {
+    await assertFails(getDoc(doc(as('ama'), EMAIL_VERIFICATIONS, 'ama')));
+    await assertFails(updateDoc(doc(as('ama'), EMAIL_VERIFICATIONS, 'ama'), { count: 0 }));
+  });
+});
+
+describe('an account whose email address is not verified', () => {
+  // Ama is active and listed, but has signed in with an unverified address.
+  beforeEach(async () => {
+    await seed(`${USERS}/ama`, { role: 'member', email: 'ama@example.com' });
+    await seed(`${MEMBERS}/ama`, {
+      ...newProfile({ status: 'active' }),
+      createdAt: Timestamp.now(),
+    });
+    await seed(`${DIRECTORY}/ama`, { firstNames: 'Ama', surname: 'Mensah' });
+  });
+
+  it('cannot read anything, not even its own records (FR-1.2)', async () => {
+    for (const claims of [{ email_verified: false }, { email_verified: undefined }]) {
+      const db = as('ama', claims);
+      await assertFails(getDoc(doc(db, USERS, 'ama')));
+      await assertFails(getDoc(doc(db, MEMBERS, 'ama')));
+      await assertFails(getDoc(doc(db, DIRECTORY, 'ama')));
+      await assertFails(getDocs(collection(db, DIRECTORY)));
+    }
   });
 });
 

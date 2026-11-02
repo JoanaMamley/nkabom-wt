@@ -5,6 +5,7 @@ import { Environment } from './environment.model';
 export const environment: Environment = {
   production: false,
   privacyContact: 'privacy@example.com',
+  apiUrl: 'http://127.0.0.1:8787',
   emulators: {
     authUrl: 'http://127.0.0.1:9099',
     firestoreHost: '127.0.0.1',

@@ -76,3 +76,103 @@ a {
   outline: 2px solid var(--color-focus);
   outline-offset: 2px;
 }
+
+// Shared page and form styles, so every form looks and behaves the same.
+
+.page {
+  max-width: 28rem;
+  margin: 0 auto;
+  padding: 1rem 0 2rem;
+}
+
+.field {
+  margin-bottom: 1rem;
+}
+
+label {
+  display: block;
+  margin-bottom: 0.25rem;
+  font-weight: 600;
+}
+
+input {
+  box-sizing: border-box;
+  width: 100%;
+  padding: 0.625rem 0.75rem;
+  border: 1px solid var(--color-border);
+  border-radius: 0.375rem;
+  background: var(--color-bg);
+  color: var(--color-text);
+  // The body's 16px: anything smaller makes iPhones zoom in on focus.
+  font: inherit;
+}
+
+input[aria-invalid='true'] {
+  border-color: var(--color-error);
+}
+
+.hint {
+  margin: 0.25rem 0 0;
+  color: var(--color-text-muted);
+  font-size: 0.875rem;
+}
+
+.field-error,
+.hint.field-error,
+.form-error {
+  color: var(--color-error);
+}
+
+.field-error {
+  margin: 0.25rem 0 0;
+  font-size: 0.875rem;
+}
+
+.status {
+  color: var(--color-success);
+}
+
+.actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+  margin: 1.5rem 0;
+}
+
+button,
+.button {
+  display: inline-block;
+  // 44px: the smallest comfortable touch target.
+  min-height: 2.75rem;
+  padding: 0.625rem 1.25rem;
+  border: 1px solid var(--color-border);
+  border-radius: 0.375rem;
+  background: var(--color-surface);
+  color: var(--color-text);
+  font: inherit;
+  text-decoration: none;
+  cursor: pointer;
+}
+
+button.primary,
+.button.primary {
+  border-color: var(--color-primary);
+  background: var(--color-primary);
+  color: var(--color-on-primary);
+  font-weight: 600;
+}
+
+button:disabled {
+  opacity: 0.6;
+  cursor: default;
+}
+
+// A button that reads as a link, for actions inside a sentence.
+button.link {
+  min-height: auto;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--color-link);
+  text-decoration: underline;
+}
