@@ -23,8 +23,9 @@
       }
     </div>
 
-    <div class="field">
+    <div class="field has-reveal">
       <input
+        #passwordInput
         id="password"
         type="password"
         formControlName="password"
@@ -34,6 +35,7 @@
         aria-describedby="password-hint"
       />
       <label for="password">Password</label>
+      <app-reveal-password [input]="passwordInput" />
       <p id="password-hint" class="hint" [class.field-error]="invalid('password')">
         At least {{ minPasswordLength }} characters.
       </p>

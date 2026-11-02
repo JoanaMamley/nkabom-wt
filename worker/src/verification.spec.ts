@@ -7,6 +7,7 @@ import { emulatorEnv, signedIn } from './test-helpers';
 import {
   confirmVerification,
   MAX_EMAILS_PER_DAY,
+  MAX_EMAILS_PER_DAY_IN_ALL,
   RESEND_SECONDS,
   sendVerificationEmail,
   VERIFY_LINK_HOURS,
@@ -129,11 +130,43 @@ describe('sendVerificationEmail', () => {
     ).resolves.toBeInstanceOf(Response);
   });
 
-  it('does not count an email that failed to send', async () => {
+  it('does not count an email that failed to send, so the caller can try again at once', async () => {
     const broken = { ...env, EMAIL_PROVIDER: 'gmail' };
 
     expect((await errorOf(sendVerificationEmail(broken, AMA, NOW)))?.status).toBe(502);
-    expect(firestore.docs.get('emailVerifications/ama')).toBeUndefined();
+
+    expect(firestore.docs.get('emailVerifications/ama')).toMatchObject({ count: 0 });
+    expect(firestore.docs.get('emailVerifications/_all')).toMatchObject({ count: 0 });
+    await expect(sendVerificationEmail(env, AMA, NOW)).resolves.toBeInstanceOf(Response);
+  });
+
+  it(`sends at most ${MAX_EMAILS_PER_DAY_IN_ALL} a day across all accounts`, async () => {
+    firestore.docs.set('emailVerifications/_all', {
+      lastSentAt: NOW - 3600_000,
+      day: '2026-10-31',
+      count: MAX_EMAILS_PER_DAY_IN_ALL - 1,
+    });
+
+    await sendVerificationEmail(env, AMA, NOW);
+    const kofi = { ...AMA, uid: 'kofi', email: 'kofi@example.com' };
+
+    expect(await errorOf(sendVerificationEmail(env, kofi, NOW))).toEqual({
+      status: 429,
+      message: 'Nkabom has sent all the emails it can today. Please try again tomorrow',
+    });
+    expect(firestore.docs.get('emailVerifications/_all')).toMatchObject({
+      count: MAX_EMAILS_PER_DAY_IN_ALL,
+    });
+  });
+
+  it('counts every account’s emails in the daily total', async () => {
+    await sendVerificationEmail(env, AMA, NOW);
+    await sendVerificationEmail(env, { ...AMA, uid: 'kofi', email: 'kofi@example.com' }, NOW);
+
+    expect(firestore.docs.get('emailVerifications/_all')).toMatchObject({
+      day: '2026-10-31',
+      count: 2,
+    });
   });
 });
 

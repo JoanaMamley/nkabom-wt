@@ -2,7 +2,7 @@ import type { User } from './auth';
 import { sendEmail } from './email';
 import type { Env } from './env';
 import { lookupAccount, markEmailVerified } from './firebase-auth';
-import { commit, getDocument, WriteBatch } from './firestore';
+import { runTransaction } from './firestore';
 import { HttpError, json, readJson } from './http';
 import { signLink, verifyLink } from './links';
 import { EMAIL_VERIFICATIONS, type EmailVerification } from './model';
@@ -20,6 +20,16 @@ export const RESEND_SECONDS = 60;
  * the shared Gmail account's daily allowance (email.ts).
  */
 export const MAX_EMAILS_PER_DAY = 5;
+/**
+ * At most this many verification emails a day (UTC) across all accounts. Accounts are free to
+ * create, so without it a run of scripted sign-ups could use up the shared Gmail allowance and
+ * stop approval emails. Well above real sign-ups for a community of about 1,000.
+ */
+export const MAX_EMAILS_PER_DAY_IN_ALL = 100;
+
+// The running total for every account, beside the per-account records. Firebase user IDs are only
+// letters and digits, so this ID never clashes with one.
+const ALL_ACCOUNTS = `${EMAIL_VERIFICATIONS}/_all`;
 
 const FIREBASE_UID = /^[A-Za-z0-9]{1,128}$/;
 
@@ -41,15 +51,29 @@ export async function sendVerificationEmail(
   }
 
   const path = `${EMAIL_VERIFICATIONS}/${user.uid}`;
-  const previous = (await getDocument(env, path)) as EmailVerification | null;
-  if (previous && now - previous.lastSentAt < RESEND_SECONDS * 1000) {
-    throw new HttpError(429, 'Please wait a minute before asking for another email');
-  }
   const day = new Date(now).toISOString().slice(0, 10);
-  const count = previous?.day === day ? previous.count : 0;
-  if (count >= MAX_EMAILS_PER_DAY) {
-    throw new HttpError(429, 'Too many emails today. Please try again tomorrow');
-  }
+  // Checked and counted in one transaction before sending, so requests sent at the same moment
+  // cannot all get past the limits.
+  const previous = await runTransaction(env, async (tx) => {
+    const [mine, all] = (await tx.getAll(path, ALL_ACCOUNTS)) as (EmailVerification | null)[];
+    if (mine && now - mine.lastSentAt < RESEND_SECONDS * 1000) {
+      throw new HttpError(429, 'Please wait a minute before asking for another email');
+    }
+    const count = mine?.day === day ? mine.count : 0;
+    if (count >= MAX_EMAILS_PER_DAY) {
+      throw new HttpError(429, 'Too many emails today. Please try again tomorrow');
+    }
+    const total = all?.day === day ? all.count : 0;
+    if (total >= MAX_EMAILS_PER_DAY_IN_ALL) {
+      throw new HttpError(
+        429,
+        'Nkabom has sent all the emails it can today. Please try again tomorrow',
+      );
+    }
+    tx.set(path, { lastSentAt: now, day, count: count + 1 } satisfies EmailVerification);
+    tx.set(ALL_ACCOUNTS, { lastSentAt: now, day, count: total + 1 } satisfies EmailVerification);
+    return mine;
+  });
 
   const expires = String(Math.floor(now / 1000) + VERIFY_LINK_HOURS * 3600);
   const sig = await signLink(env, ['verify-email', user.uid, user.email, expires]);
@@ -60,14 +84,35 @@ export async function sendVerificationEmail(
       expiresInHours: VERIFY_LINK_HOURS,
     });
   } catch {
-    // sendEmail has logged why.
+    // sendEmail has logged why. An email that was not sent does not count, and the caller can try
+    // again straight away.
+    await uncount(env, path, previous, day).catch(() => undefined);
     throw new HttpError(502, 'The email could not be sent');
   }
 
-  const batch = new WriteBatch();
-  batch.set(path, { lastSentAt: now, day, count: count + 1 } satisfies EmailVerification);
-  await commit(env, batch);
   return json({ sentTo: user.email });
+}
+
+// Takes back the count for an email that failed to send.
+async function uncount(
+  env: Env,
+  path: string,
+  previous: EmailVerification | null,
+  day: string,
+): Promise<void> {
+  await runTransaction(env, async (tx) => {
+    const [mine, all] = (await tx.getAll(path, ALL_ACCOUNTS)) as (EmailVerification | null)[];
+    if (mine?.day === day) {
+      tx.set(path, {
+        lastSentAt: previous?.lastSentAt ?? 0,
+        day,
+        count: Math.max(0, mine.count - 1),
+      } satisfies EmailVerification);
+    }
+    if (all?.day === day) {
+      tx.set(ALL_ACCOUNTS, { ...all, count: Math.max(0, all.count - 1) });
+    }
+  });
 }
 
 /**

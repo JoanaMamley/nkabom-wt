@@ -213,7 +213,7 @@ Email sign-up (NKB-202, FR-1.1, FR-1.2) is at `/sign-up`. The app creates the Fi
 
 - **The link** carries an HMAC-SHA256 signature over the user ID, the address it was sent to and its expiry, keyed by `PHOTO_LINK_KEY` like the photo links. It expires after 24 hours (`VERIFY_LINK_HOURS`), and stops working if the account's address changes. Opening it again after it worked is harmless.
 - **Until the address is verified,** `requireAccount` answers `403` and the Firestore rules give the account nothing, so it cannot log in to any part of the site.
-- **Resends** are limited to one a minute and 5 a day per account (`RESEND_SECONDS`, `MAX_EMAILS_PER_DAY`), recorded in `emailVerifications/{uid}`, so no one account can use up the shared Gmail allowance.
+- **Resends** are limited to one a minute and 5 a day per account (`RESEND_SECONDS`, `MAX_EMAILS_PER_DAY`), recorded in `emailVerifications/{uid}`, and to 100 a day across all accounts (`MAX_EMAILS_PER_DAY_IN_ALL`, in `emailVerifications/_all`), since accounts are free to create. Each send is counted in a transaction before it goes, so requests sent at the same moment cannot get past the limits, and a send that fails is not counted. Together they keep sign-ups from using up the shared Gmail allowance.
 - **Locally,** the email, link included, is written to the `wrangler dev` log (`EMAIL_PROVIDER` is `log`).
 - **Passwords** must be at least 8 characters in the app. Firebase's own minimum is 6; to enforce 8 on the server too, set it under **Authentication > Settings > Password policy** in each project (free).
 

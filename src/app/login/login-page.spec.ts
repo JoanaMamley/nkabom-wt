@@ -5,6 +5,7 @@ import { provideRouter, Router } from '@angular/router';
 import { Accounts } from '../core/accounts';
 import { Api, ApiError } from '../core/api';
 import { Theme } from '../core/theme';
+import { Verification } from '../sign-up/verification';
 import { greeting, LoginPage } from './login-page';
 
 describe('greeting', () => {
@@ -18,6 +19,7 @@ describe('greeting', () => {
 describe('LoginPage', () => {
   const accounts = { logIn: vi.fn(), signOut: vi.fn() };
   const api = { get: vi.fn() };
+  const verification = { sendError: signal<string | null>(null) };
   let navigate: ReturnType<typeof vi.spyOn>;
 
   beforeEach(() => {
@@ -30,6 +32,7 @@ describe('LoginPage', () => {
         provideRouter([]),
         { provide: Accounts, useValue: accounts },
         { provide: Api, useValue: api },
+        { provide: Verification, useValue: verification },
         { provide: Theme, useValue: { mode: signal('light'), toggle: vi.fn() } },
       ],
     });
@@ -80,24 +83,37 @@ describe('LoginPage', () => {
 
   it('sends an account with an unverified email to check it (FR-1.2)', async () => {
     accounts.logIn.mockResolvedValue({ emailVerified: false });
+    // From an earlier, failed send in this tab.
+    verification.sendError.set('The email could not be sent');
     const { logIn } = await render();
 
     await logIn('ama@example.com', 'correct horse');
 
     expect(api.get).not.toHaveBeenCalled();
     expect(navigate).toHaveBeenCalledWith('/check-email');
+    expect(verification.sendError()).toBeNull();
   });
 
-  it('gives one answer for a wrong email or password', async () => {
-    accounts.logIn.mockRejectedValue({ code: 'auth/invalid-credential' });
-    const { page, logIn } = await render();
+  for (const code of ['auth/invalid-credential', 'auth/user-not-found', 'auth/wrong-password']) {
+    it(`gives one answer for a wrong email or password (${code})`, async () => {
+      accounts.logIn.mockRejectedValue({ code });
+      const { page, logIn } = await render();
 
-    await logIn('ama@example.com', 'wrong');
+      await logIn('ama@example.com', 'wrong');
 
-    expect(page.querySelector('[role="alert"]')?.textContent).toContain(
-      'The email address or password is not right.',
-    );
-    expect(navigate).not.toHaveBeenCalled();
+      expect(page.querySelector('[role="alert"]')?.textContent).toContain(
+        'The email address or password is not right.',
+      );
+      expect(navigate).not.toHaveBeenCalled();
+    });
+  }
+
+  it('has an eye button to show the password', async () => {
+    const { page } = await render();
+
+    page.querySelector<HTMLButtonElement>('app-reveal-password button')!.click();
+
+    expect(page.querySelector<HTMLInputElement>('#password')!.type).toBe('text');
   });
 
   it('signs out again when the Worker refuses the account', async () => {

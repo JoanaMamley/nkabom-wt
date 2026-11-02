@@ -47,9 +47,14 @@ export class VerifyEmailPage implements OnInit {
       return;
     }
     if (user && this.signedIn()) {
-      // A new ID token, so the Worker and the rules see the verified address.
-      await user.reload();
-      await user.getIdToken(true);
+      // A new ID token, so the Worker and the rules see the verified address. The address is
+      // verified either way; if this fails, the next login picks it up.
+      try {
+        await user.reload();
+        await user.getIdToken(true);
+      } catch {
+        // Nothing to do.
+      }
     }
     this.state.set('verified');
   }

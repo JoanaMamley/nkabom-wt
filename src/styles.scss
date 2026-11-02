@@ -149,6 +149,11 @@ a {
   }
 }
 
+// A password field with the eye button (RevealPassword) at its right end.
+.field.has-reveal input {
+  padding-right: 2.75rem;
+}
+
 .hint {
   margin: 0.375rem 0 0;
   color: var(--color-text-muted);

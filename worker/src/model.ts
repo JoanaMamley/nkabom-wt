@@ -148,7 +148,8 @@ export interface JobStatus {
 
 /**
  * emailVerifications/{uid}: when the account was last sent a verification email (NKB-202), to
- * limit how often it can ask. Only the Worker reads and writes it.
+ * limit how often it can ask, and emailVerifications/_all: the same for all accounts together.
+ * Only the Worker reads and writes them.
  */
 export interface EmailVerification {
   /** Milliseconds since 1970, as Date.now() gives. */

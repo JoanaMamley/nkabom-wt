@@ -56,6 +56,17 @@ describe('VerifyEmailPage', () => {
     expect(page.querySelector('a.button')?.textContent).toContain('Continue');
   });
 
+  it('still says confirmed when refreshing the sign-in fails, since the address is verified', async () => {
+    user = {
+      uid: 'ama',
+      reload: vi.fn().mockRejectedValue(new Error('offline')),
+      getIdToken: vi.fn(),
+    };
+    const page = await render();
+
+    expect(page.querySelector('h1')?.textContent).toContain('Email address confirmed');
+  });
+
   it('says when the link has expired', async () => {
     api.post.mockRejectedValue(new ApiError(410, 'This link has expired'));
     const page = await render();
