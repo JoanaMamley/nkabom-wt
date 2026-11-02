@@ -1,6 +1,7 @@
 import { Component, inject, OnInit, PendingTasks, signal } from '@angular/core';
 import { Router, RouterLink } from '@angular/router';
 
+import { AuthLayout } from '../auth-layout/auth-layout';
 import { Accounts } from '../core/accounts';
 import { Verification } from './verification';
 
@@ -10,7 +11,7 @@ import { Verification } from './verification';
  */
 @Component({
   selector: 'app-check-email-page',
-  imports: [RouterLink],
+  imports: [AuthLayout, RouterLink],
   templateUrl: './check-email-page.html',
 })
 export class CheckEmailPage implements OnInit {
@@ -34,7 +35,7 @@ export class CheckEmailPage implements OnInit {
   private async load(): Promise<void> {
     const user = await this.accounts.currentUser();
     if (user?.emailVerified) {
-      await this.router.navigateByUrl('/');
+      await this.router.navigateByUrl('/home');
       return;
     }
     this.email.set(user?.email ?? null);
@@ -65,7 +66,7 @@ export class CheckEmailPage implements OnInit {
       if (user.emailVerified) {
         // A new ID token, so the Worker and the rules see the verified address.
         await user.getIdToken(true);
-        await this.router.navigateByUrl('/');
+        await this.router.navigateByUrl('/home');
         return;
       }
       this.message.set(

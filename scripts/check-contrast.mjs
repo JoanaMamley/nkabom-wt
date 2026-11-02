@@ -39,6 +39,9 @@ const BACKGROUNDS = ['bg', 'surface'];
 const pairs = [
   ...TEXT.flatMap((fg) => BACKGROUNDS.map((bg) => [fg, bg, 4.5])),
   ['on-primary', 'primary', 4.5],
+  // White text on both ends of the brand gradient (login art and main buttons).
+  ['on-brand', 'brand-from', 4.5],
+  ['on-brand', 'brand-to', 4.5],
   // The update bar uses the page colours swapped.
   ['bg', 'text', 4.5],
   ...['border', 'primary', 'focus'].flatMap((fg) => BACKGROUNDS.map((bg) => [fg, bg, 3])),

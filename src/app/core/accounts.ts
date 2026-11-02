@@ -1,5 +1,13 @@
 import { inject, Injectable } from '@angular/core';
-import { createUserWithEmailAndPassword, signOut, type User } from 'firebase/auth';
+import {
+  browserLocalPersistence,
+  browserSessionPersistence,
+  createUserWithEmailAndPassword,
+  setPersistence,
+  signInWithEmailAndPassword,
+  signOut,
+  type User,
+} from 'firebase/auth';
 
 import { FIREBASE_AUTH } from './firebase';
 
@@ -17,6 +25,15 @@ export class Accounts {
   /** Creates an email and password account and signs in to it. */
   async signUp(email: string, password: string): Promise<User> {
     return (await createUserWithEmailAndPassword(this.auth, email, password)).user;
+  }
+
+  /**
+   * Logs in with email and password. With remember, the sign-in survives closing the browser on
+   * this device; without it, it ends when the browser or tab closes.
+   */
+  async logIn(email: string, password: string, remember: boolean): Promise<User> {
+    await setPersistence(this.auth, remember ? browserLocalPersistence : browserSessionPersistence);
+    return (await signInWithEmailAndPassword(this.auth, email, password)).user;
   }
 
   signOut(): Promise<void> {

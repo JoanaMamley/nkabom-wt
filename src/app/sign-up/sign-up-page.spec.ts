@@ -1,7 +1,9 @@
+import { signal } from '@angular/core';
 import { TestBed } from '@angular/core/testing';
 import { provideRouter, Router } from '@angular/router';
 
 import { Accounts } from '../core/accounts';
+import { Theme } from '../core/theme';
 import { SignUpPage } from './sign-up-page';
 import { Verification } from './verification';
 
@@ -16,6 +18,7 @@ describe('SignUpPage', () => {
       imports: [SignUpPage],
       providers: [
         provideRouter([]),
+        { provide: Theme, useValue: { mode: signal('light'), toggle: vi.fn() } },
         { provide: Accounts, useValue: accounts },
         { provide: Verification, useValue: verification },
       ],

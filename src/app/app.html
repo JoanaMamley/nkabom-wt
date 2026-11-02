@@ -1,7 +1,11 @@
-<header class="app-header">
-  <span class="brand">Nkabom</span>
-  <app-theme-toggle />
-</header>
+<!-- Full-screen pages carry their own toggle and privacy link (AuthLayout). Offline, the header
+     comes back, so the toggle is still on screen. -->
+@if (!fullScreen() || !online()) {
+  <header class="app-header">
+    <span class="brand">Nkabom</span>
+    <app-theme-toggle />
+  </header>
+}
 
 @if (!online()) {
   <app-offline-page />
@@ -9,13 +13,15 @@
 
 <!-- Hidden rather than removed while offline, so a half-filled form survives a dropped connection. -->
 <div [hidden]="!online()">
-  <main>
+  <main [class.full-screen]="fullScreen()">
     <router-outlet />
   </main>
 
-  <footer class="app-footer">
-    <a routerLink="/privacy">Privacy notice</a>
-  </footer>
+  @if (!fullScreen()) {
+    <footer class="app-footer">
+      <a routerLink="/privacy">Privacy notice</a>
+    </footer>
+  }
 </div>
 
 @if (updates.ready()) {

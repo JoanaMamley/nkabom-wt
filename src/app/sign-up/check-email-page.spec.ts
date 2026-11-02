@@ -3,6 +3,7 @@ import { TestBed } from '@angular/core/testing';
 import { provideRouter, Router } from '@angular/router';
 
 import { Accounts } from '../core/accounts';
+import { Theme } from '../core/theme';
 import { CheckEmailPage } from './check-email-page';
 import { Verification } from './verification';
 
@@ -31,6 +32,7 @@ describe('CheckEmailPage', () => {
       imports: [CheckEmailPage],
       providers: [
         provideRouter([]),
+        { provide: Theme, useValue: { mode: signal('light'), toggle: vi.fn() } },
         { provide: Accounts, useValue: accounts },
         { provide: Verification, useValue: verification },
       ],
@@ -91,14 +93,14 @@ describe('CheckEmailPage', () => {
     await click('I have confirmed my email');
 
     expect(user!.getIdToken).toHaveBeenCalledWith(true);
-    expect(navigate).toHaveBeenCalledWith('/');
+    expect(navigate).toHaveBeenCalledWith('/home');
   });
 
   it('skips straight on for an address already confirmed', async () => {
     user!.emailVerified = true;
     await render();
 
-    expect(navigate).toHaveBeenCalledWith('/');
+    expect(navigate).toHaveBeenCalledWith('/home');
   });
 
   it('signs out to sign up again with another address', async () => {
@@ -114,7 +116,7 @@ describe('CheckEmailPage', () => {
     user = null;
     const { page } = await render();
 
-    expect(page.querySelector('button')).toBeNull();
+    expect(page.querySelector('.panel-body button')).toBeNull();
     expect(page.textContent).toContain('log in to get a new one');
   });
 });

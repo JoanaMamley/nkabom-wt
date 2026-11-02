@@ -1,6 +1,7 @@
 import { Component, inject, OnInit, PendingTasks, signal } from '@angular/core';
 import { ActivatedRoute, RouterLink } from '@angular/router';
 
+import { AuthLayout } from '../auth-layout/auth-layout';
 import { Accounts } from '../core/accounts';
 import { Api, ApiError } from '../core/api';
 
@@ -13,7 +14,7 @@ type State = 'verifying' | 'verified' | 'expired' | 'invalid' | 'error';
  */
 @Component({
   selector: 'app-verify-email-page',
-  imports: [RouterLink],
+  imports: [AuthLayout, RouterLink],
   templateUrl: './verify-email-page.html',
 })
 export class VerifyEmailPage implements OnInit {
