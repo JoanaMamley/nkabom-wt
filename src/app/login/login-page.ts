@@ -4,8 +4,9 @@ import { Router, RouterLink } from '@angular/router';
 
 import { AuthLayout } from '../auth-layout/auth-layout';
 import { Accounts } from '../core/accounts';
-import { Api, ApiError } from '../core/api';
+import { ApiError } from '../core/api';
 import { authErrorMessage } from '../core/messages';
+import { Session } from '../core/session';
 import { RevealPassword } from '../reveal-password/reveal-password';
 import { Verification } from '../sign-up/verification';
 
@@ -28,7 +29,8 @@ export function greeting(hour: number): string {
 /**
  * Login with email and password (FR-1.1), and the app's first page: / leads here. One of the
  * three pages anyone can see without logging in (FR-1.12). An account whose email is not
- * verified goes to the check-email page (FR-1.2). Session expiry is NKB-205's.
+ * verified goes to the check-email page (FR-1.2). After a session expires (FR-1.10, core/session.ts)
+ * it opens saying so.
  */
 @Component({
   selector: 'app-login-page',
@@ -38,7 +40,7 @@ export function greeting(hour: number): string {
 })
 export class LoginPage {
   private readonly accounts = inject(Accounts);
-  private readonly api = inject(Api);
+  private readonly session = inject(Session);
   private readonly router = inject(Router);
   private readonly verification = inject(Verification);
 
@@ -51,6 +53,12 @@ export class LoginPage {
   protected readonly submitted = signal(false);
   protected readonly busy = signal(false);
   protected readonly error = signal<string | null>(null);
+  /** Read once: the message goes when the page does. */
+  protected readonly expired = this.session.expiredMessage();
+
+  constructor() {
+    this.session.expiredMessage.set(null);
+  }
 
   protected async submit(): Promise<void> {
     this.submitted.set(true);
@@ -69,8 +77,8 @@ export class LoginPage {
         await this.router.navigateByUrl('/check-email');
         return;
       }
-      // Creates the users record on a first login (README, Worker).
-      await this.api.get('/v1/me');
+      // Creates the users record on a first login and starts the session (README, Worker).
+      await this.session.start();
       await this.router.navigateByUrl('/home');
     } catch (error) {
       if (error instanceof ApiError) {

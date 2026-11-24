@@ -9,6 +9,7 @@ export const AUDIT_LOG = 'auditLog';
 export const JOB_STATUS = 'jobStatus';
 export const EMAIL_VERIFICATIONS = 'emailVerifications';
 export const PASSWORD_RESETS = 'passwordResets';
+export const SESSIONS = 'sessions';
 
 // FR-1.5: a Primary Admin is an admin who can also manage admin accounts.
 export const ROLES = ['member', 'admin', 'primaryAdmin'] as const;
@@ -42,6 +43,15 @@ export interface UserRecord {
   role: Role;
   email: string | null;
   createdAt: Date;
+}
+
+/**
+ * sessions/{uid}: when each of the account's sign-ins last called the Worker (NKB-205), keyed by
+ * the sign-in's time in seconds (the ID token's auth_time). Sign-ins idle for longer than any
+ * role allows are removed as others are written (sessions.ts).
+ */
+export interface SessionRecord {
+  signIns: Record<string, Date>;
 }
 
 /**

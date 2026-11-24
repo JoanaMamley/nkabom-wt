@@ -16,3 +16,8 @@
   min-height: 2.75rem;
   cursor: pointer;
 }
+
+// Why the member is here again, such as an expired session: information, not an error.
+.form-notice {
+  margin: 0 0 1.25rem;
+}

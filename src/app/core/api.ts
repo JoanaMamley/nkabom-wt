@@ -31,6 +31,12 @@ export class Api {
   private readonly auth = inject(FIREBASE_AUTH);
   private readonly url = inject(API_URL);
 
+  /**
+   * Called when the Worker refuses a signed-in call with 401, such as for an expired session.
+   * Session sets it (core/session.ts), which cannot be injected here as it uses Api itself.
+   */
+  onUnauthorized: (() => void) | undefined;
+
   get<T>(path: string): Promise<T> {
     return this.request<T>('GET', path);
   }
@@ -71,6 +77,9 @@ export class Api {
       throw new ApiError(0, UNREACHABLE);
     } finally {
       clearTimeout(timer);
+    }
+    if (response.status === 401 && user) {
+      this.onUnauthorized?.();
     }
     if (!response.ok) {
       throw new ApiError(response.status, data.error ?? SOMETHING_WENT_WRONG);

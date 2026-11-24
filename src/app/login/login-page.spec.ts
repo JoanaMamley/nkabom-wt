@@ -3,7 +3,8 @@ import { TestBed } from '@angular/core/testing';
 import { provideRouter, Router } from '@angular/router';
 
 import { Accounts } from '../core/accounts';
-import { Api, ApiError } from '../core/api';
+import { ApiError } from '../core/api';
+import { SESSION_EXPIRED, Session } from '../core/session';
 import { Theme } from '../core/theme';
 import { Verification } from '../sign-up/verification';
 import { greeting, LoginPage } from './login-page';
@@ -18,20 +19,21 @@ describe('greeting', () => {
 
 describe('LoginPage', () => {
   const accounts = { logIn: vi.fn(), signOut: vi.fn() };
-  const api = { get: vi.fn() };
+  const session = { start: vi.fn(), expiredMessage: signal<string | null>(null) };
   const verification = { sendError: signal<string | null>(null) };
   let navigate: ReturnType<typeof vi.spyOn>;
 
   beforeEach(() => {
     accounts.logIn.mockReset().mockResolvedValue({ emailVerified: true });
     accounts.signOut.mockReset().mockResolvedValue(undefined);
-    api.get.mockReset().mockResolvedValue({ uid: 'ama', role: 'member' });
+    session.start.mockReset().mockResolvedValue({ uid: 'ama', role: 'member' });
+    session.expiredMessage.set(null);
     TestBed.configureTestingModule({
       imports: [LoginPage],
       providers: [
         provideRouter([]),
         { provide: Accounts, useValue: accounts },
-        { provide: Api, useValue: api },
+        { provide: Session, useValue: session },
         { provide: Verification, useValue: verification },
         { provide: Theme, useValue: { mode: signal('light'), toggle: vi.fn() } },
       ],
@@ -69,8 +71,18 @@ describe('LoginPage', () => {
     await logIn(' ama@example.com ', 'correct horse', true);
 
     expect(accounts.logIn).toHaveBeenCalledWith('ama@example.com', 'correct horse', true);
-    expect(api.get).toHaveBeenCalledWith('/v1/me');
+    expect(session.start).toHaveBeenCalled();
     expect(navigate).toHaveBeenCalledWith('/home');
+  });
+
+  it('says when a session has expired, once', async () => {
+    session.expiredMessage.set(SESSION_EXPIRED);
+
+    const { page } = await render();
+
+    expect(page.querySelector('[role="status"]')?.textContent).toContain(SESSION_EXPIRED);
+    expect(session.expiredMessage()).toBeNull();
+    expect((await render()).page.querySelector('[role="status"]')).toBeNull();
   });
 
   it('is not remembered unless the box is ticked', async () => {
@@ -89,7 +101,7 @@ describe('LoginPage', () => {
 
     await logIn('ama@example.com', 'correct horse');
 
-    expect(api.get).not.toHaveBeenCalled();
+    expect(session.start).not.toHaveBeenCalled();
     expect(navigate).toHaveBeenCalledWith('/check-email');
     expect(verification.sendError()).toBeNull();
   });
@@ -117,7 +129,7 @@ describe('LoginPage', () => {
   });
 
   it('signs out again when the Worker refuses the account', async () => {
-    api.get.mockRejectedValue(new ApiError(0, 'Nkabom could not be reached.'));
+    session.start.mockRejectedValue(new ApiError(0, 'Nkabom could not be reached.'));
     const { page, logIn } = await render();
 
     await logIn('ama@example.com', 'correct horse');
@@ -127,7 +139,7 @@ describe('LoginPage', () => {
   });
 
   it('still shows the error and the form when signing out again fails too', async () => {
-    api.get.mockRejectedValue(new ApiError(0, 'Nkabom could not be reached.'));
+    session.start.mockRejectedValue(new ApiError(0, 'Nkabom could not be reached.'));
     accounts.signOut.mockRejectedValue(new Error('offline'));
     const { page, logIn } = await render();
 

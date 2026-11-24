@@ -190,16 +190,16 @@ Writes with side effects (registration, profile edits, approvals, admin changes,
 
 Every endpoint except `/health`, the signed photo links, the two email verification endpoints and the two password reset endpoints starts with `requireAccount` from [worker/src/users.ts](worker/src/users.ts), so admin routes are enforced on the server, not only hidden in the app (FR-1.11). It checks the caller's Firebase ID token (`requireUser` in [worker/src/auth.ts](worker/src/auth.ts)): the token must be signed by Google, issued for that environment's project, unexpired, and name a user; otherwise the answer is `401`. An account whose email address is not yet verified gets `403` (FR-1.2, see [Sign-up and email verification](#sign-up-and-email-verification)). It then reads the caller's `users/{uid}` record for their role, and on a new account's first call creates that record as `member` (FR-1.5), so the app calls `GET /v1/me` straight after sign-up and every sign-in. Admin endpoints then call `requireAdmin` ([worker/src/roles.ts](worker/src/roles.ts)), which answers `403` to a member. The role is also stored as a custom claim (`setRoleClaim` in [worker/src/firebase-auth.ts](worker/src/firebase-auth.ts), called when an admin is created or changed, NKB-207 to NKB-209), which the Firestore rules read to let admins read `users`, `members` and `directory`; the rules also check the account's `users` record, so a stale claim grants nothing, and a token with no claim is a member's. Nothing is writable from the app. The Worker reaches Firestore through its REST API, as the project's service account, which bypasses the Firestore rules the way the Admin SDK does.
 
-| Endpoint                       | Needs sign-in         | Takes                                                 | Returns                                                      |
-| ------------------------------ | --------------------- | ----------------------------------------------------- | ------------------------------------------------------------ |
-| `GET /health`                  | No                    |                                                       | `{ ok: true }`                                               |
-| `GET /v1/me`                   | Yes                   |                                                       | `{ uid, role }`, creating the `users` record on a first call |
-| `POST /v1/registration`        | Yes                   | Every profile detail                                  | `201` `{ status: "pending" }` (see [Profiles](#profiles))    |
-| `PATCH /v1/profile`            | Yes                   | Any of the profile details                            | `204`                                                        |
-| `POST /v1/email/verification`  | Yes, not yet verified |                                                       | `{ sentTo }`, after emailing a verification link             |
-| `POST /v1/email/verify`        | No                    | `{ uid, expires, sig }` from the link                 | `{ verified: true }`                                         |
-| `POST /v1/password/reset-link` | No                    | `{ email }`                                           | `{ requested: true }`, whether or not an email went          |
-| `POST /v1/password/reset`      | No                    | `{ uid, expires, sig }` from the link, and `password` | `{ reset: true }`, or `{ email }` without a password         |
+| Endpoint                       | Needs sign-in         | Takes                                                 | Returns                                                               |
+| ------------------------------ | --------------------- | ----------------------------------------------------- | --------------------------------------------------------------------- |
+| `GET /health`                  | No                    |                                                       | `{ ok: true }`                                                        |
+| `GET /v1/me`                   | Yes                   |                                                       | `{ uid, role, session }`, creating the `users` record on a first call |
+| `POST /v1/registration`        | Yes                   | Every profile detail                                  | `201` `{ status: "pending" }` (see [Profiles](#profiles))             |
+| `PATCH /v1/profile`            | Yes                   | Any of the profile details                            | `204`                                                                 |
+| `POST /v1/email/verification`  | Yes, not yet verified |                                                       | `{ sentTo }`, after emailing a verification link                      |
+| `POST /v1/email/verify`        | No                    | `{ uid, expires, sig }` from the link                 | `{ verified: true }`                                                  |
+| `POST /v1/password/reset-link` | No                    | `{ email }`                                           | `{ requested: true }`, whether or not an email went                   |
+| `POST /v1/password/reset`      | No                    | `{ uid, expires, sig }` from the link, and `password` | `{ reset: true }`, or `{ email }` without a password                  |
 
 The photo endpoints are listed under [Photo storage](#photo-storage), and the admin test email under [Email](#email).
 
@@ -208,6 +208,22 @@ Send the token as `Authorization: Bearer <ID token>`. Errors come back as `{ err
 **CORS:** only the origins in `ALLOWED_ORIGINS` (the app's `web.app` and `firebaseapp.com` addresses, staging's preview channels as `https://nkabom-staging--*.web.app`, and `localhost:4200` locally) get CORS headers, for `GET`, `POST`, `PUT`, `PATCH` and `DELETE` with `Authorization` and `Content-Type`. Add a custom domain there if the app later gets one.
 
 **Adding an endpoint:** add a case to `route` in [worker/src/index.ts](worker/src/index.ts), call `requireAccount` first (and `requireAdmin` from [worker/src/roles.ts](worker/src/roles.ts) for admin endpoints), and throw `HttpError` for answers such as `400` or `403`. Firestore helpers are in [worker/src/firestore.ts](worker/src/firestore.ts): `getDocument` for a single read, and `runTransaction` for any change, which reads with `tx.getAll`, adds writes with `tx.create`, `set`, `update` and `delete` (`SERVER_TIME` as a value stores the commit time), and commits them all or none. Firestore runs the function again if the transaction clashes with another, so keep side effects such as email outside it.
+
+### Session expiry
+
+Sessions end after inactivity, and sooner for admins (NKB-205, FR-1.10). The limits are in [worker/src/sessions.ts](worker/src/sessions.ts):
+
+| Role                 | Idle limit | Longest session     |
+| -------------------- | ---------- | ------------------- |
+| Member               | 30 days    | No limit            |
+| Admin, Primary Admin | 30 minutes | 12 hours from login |
+
+- **The Worker** knows each sign-in by its time (the ID token's `auth_time`, which stays the same as Firebase renews the token) and keeps when it last called in `sessions/{uid}`. `requireAccount` refuses an expired sign-in with `401` `{"error":"Your session has expired. Please log in again."}`, and otherwise records the activity, writing at most once a minute. A sign-in it has not seen counts as idle since it began, so an old one cannot come back as new. Entries idle for more than 30 days are removed as others are written.
+- **The Firestore rules** check the same for admin reads: the sign-in must be under 12 hours old and active within the last 31 minutes (one more for the Worker's once-a-minute writes). A member's own reads are not checked there; the Worker and the app end those sessions.
+- **The app** ([src/app/core/session.ts](src/app/core/session.ts)) logs out on time by itself, using the limits `GET /v1/me` returns as `session` (`idleSeconds`, and `expiresAt` for admins). Activity is a tap, key press or scroll, shared between tabs. While the app is in use it calls `GET /v1/me` every few minutes (3 for admins, 5 for members), since reading Firestore alone tells the Worker nothing. A `401` from any Worker call logs out too, and the login page then says the session has expired. The logged-in pages' route guard starts this watching however someone arrives, such as straight after confirming their email. An admin who closes the app straight after using it may therefore be logged out up to 3 minutes early.
+- Firebase renews ID tokens itself; nothing here changes that.
+
+To change a limit, change it in `sessions.ts` and in `adminSessionActive` in [firestore.rules](firestore.rules).
 
 ### Sign-up and email verification
 
@@ -320,7 +336,7 @@ Once, in `worker/`, signed in as the shared project accounts (see [docs/handbook
 
    It answers `401` `{"error":"Invalid or expired sign-in"}`. Do not change the last character instead: it holds only 2 bits of the signature, so a swap can leave the signature the same and the token valid.
 
-5. `curl -s $API/v1/me -H "Authorization: Bearer $TOKEN"` answers `{"uid":"<User UID>","role":"member"}`.
+5. `curl -s $API/v1/me -H "Authorization: Bearer $TOKEN"` answers `{"uid":"<User UID>","role":"member","session":{"idleSeconds":2592000,"expiresAt":null}}`.
 6. In **Firestore Database**, the `users` collection now has a document with the User UID as its ID, `role` `member` and the test address, written by the Worker through the service account. Leave the user and document in place as data for the restore test (NKB-119).
 7. Open the staging app at `https://nkabom-staging.web.app` and check it loads.
 
@@ -562,12 +578,13 @@ Test a restore from staging into the emulator once a year and after any change t
 
 Types and collection names live in [worker/src/model.ts](worker/src/model.ts). Only the Worker writes these collections; [firestore.rules](firestore.rules) lets the app read what each person may see and denies every write from the app.
 
-| Collection        | Document ID | Holds                                                                                   | Written by                                                      |
-| ----------------- | ----------- | --------------------------------------------------------------------------------------- | --------------------------------------------------------------- |
-| `users/{uid}`     | Auth UID    | Role: `member`, `admin` or `primaryAdmin`                                               | The Worker, on the account's first call                         |
-| `members/{uid}`   | Auth UID    | Profile, and status: `pending`, `active`, `rejected` or `deactivated`                   | The Worker: registration, profile edits and status changes      |
-| `directory/{uid}` | Auth UID    | Limited profile of an active member: name, photo, course or occupation, graduation year | The Worker, in the same transaction as each `members` change    |
-| `auditLog/{id}`   | Auto ID     | Admin actions: actor, action, target, time                                              | The Worker, with the action it records; never edited or deleted |
+| Collection        | Document ID | Holds                                                                                          | Written by                                                      |
+| ----------------- | ----------- | ---------------------------------------------------------------------------------------------- | --------------------------------------------------------------- |
+| `users/{uid}`     | Auth UID    | Role: `member`, `admin` or `primaryAdmin`                                                      | The Worker, on the account's first call                         |
+| `members/{uid}`   | Auth UID    | Profile, and status: `pending`, `active`, `rejected` or `deactivated`                          | The Worker: registration, profile edits and status changes      |
+| `directory/{uid}` | Auth UID    | Limited profile of an active member: name, photo, course or occupation, graduation year        | The Worker, in the same transaction as each `members` change    |
+| `sessions/{uid}`  | Auth UID    | When each of the account's sign-ins last called the Worker ([Session expiry](#session-expiry)) | The Worker, on each call, at most once a minute                 |
+| `auditLog/{id}`   | Auto ID     | Admin actions: actor, action, target, time                                                     | The Worker, with the action it records; never edited or deleted |
 
 Using the user ID as the document ID means a user can have only one profile (FR-2.6). Anything the rules do not open is denied (FR-1.12). The rules tests in `tests/` start each case from an empty emulator database.
 

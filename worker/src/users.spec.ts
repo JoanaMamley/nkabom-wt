@@ -36,7 +36,21 @@ describe('requireAccount', () => {
       role: 'primaryAdmin',
     });
 
-    expect(firestore.commits).toEqual([]);
+    expect(firestore.dataCommits).toEqual([]);
+  });
+
+  it('refuses an expired sign-in with 401, by its role’s limits (NKB-205)', async () => {
+    const { firestore } = mockEmulators();
+    firestore.docs.set('users/ama', { role: 'admin' });
+    firestore.docs.set('users/kofi', { role: 'member' });
+    const anHourAgo = Math.floor(Date.now() / 1000) - 3600;
+
+    await expect(account('ama', { role: 'admin', auth_time: anHourAgo })).rejects.toMatchObject({
+      status: 401,
+    });
+    await expect(account('kofi', { auth_time: anHourAgo })).resolves.toMatchObject({
+      session: { idleSeconds: 30 * 24 * 3600, expiresAt: null },
+    });
   });
 
   describe('role claim', () => {

@@ -10,7 +10,9 @@ const admin: Account = {
   name: 'Efua Asante',
   email: 'efua@example.com',
   emailVerified: true,
+  authTime: 1_790_000_000,
   roleClaim: null,
+  session: { idleSeconds: 1800, expiresAt: null },
   role: 'admin',
 };
 

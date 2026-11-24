@@ -22,6 +22,10 @@ interface EncodedWrite {
   updateTransforms?: { fieldPath: string; setToServerValue: 'REQUEST_TIME' }[];
 }
 
+function writeName(write: EncodedWrite): string {
+  return write.update?.name ?? write.delete ?? '';
+}
+
 /**
  * Firestore's REST API in memory, for tests: document reads, batchGet, transactions and commits,
  * with the preconditions, server times and error answers the Firestore emulator gives. A commit
@@ -31,6 +35,13 @@ export class FakeFirestore {
   readonly docs = new Map<string, Fields>();
   /** The writes of each successful commit, as sent. */
   readonly commits: EncodedWrite[][] = [];
+
+  /** The commits apart from those recording sign-in activity (sessions.ts), which most calls make. */
+  get dataCommits(): EncodedWrite[][] {
+    return this.commits.filter(
+      (writes) => !writes.every((write) => /\/documents\/sessions\//.test(writeName(write))),
+    );
+  }
   /** How many commits to answer ABORTED, as when a transaction clashes with another. */
   abortCommits = 0;
   /** The time server-time fields get. */

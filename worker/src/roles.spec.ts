@@ -5,7 +5,16 @@ import { isAdmin, requireAdmin } from './roles';
 import type { Account } from './users';
 
 function accountWith(role: string): Account {
-  return { uid: 'ama', name: null, email: null, emailVerified: true, roleClaim: null, role };
+  return {
+    uid: 'ama',
+    name: null,
+    email: null,
+    emailVerified: true,
+    authTime: 1_790_000_000,
+    roleClaim: null,
+    role,
+    session: { idleSeconds: 1800, expiresAt: null },
+  };
 }
 
 describe('requireAdmin', () => {

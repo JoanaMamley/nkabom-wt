@@ -24,7 +24,20 @@ service cloud.firestore {
       return isVerified()
         && request.auth.token.get('role', 'member') in ['admin', 'primaryAdmin']
         && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role
-          in ['admin', 'primaryAdmin'];
+          in ['admin', 'primaryAdmin']
+        && adminSessionActive();
+    }
+
+    // Admin sessions end after 30 minutes idle or 12 hours in all (FR-1.10, NKB-205), as in
+    // worker/src/sessions.ts, which records each sign-in's last activity in sessions/{uid}. The
+    // Worker writes it at most once a minute, so the idle limit here has a minute more. A sign-in
+    // the Worker has not seen is refused, which the app avoids by calling GET /v1/me first.
+    function adminSessionActive() {
+      let signedIn = request.auth.token.auth_time;
+      let signIns = get(/databases/$(database)/documents/sessions/$(request.auth.uid)).data.signIns;
+      return request.time < timestamp.value(signedIn * 1000) + duration.value(12, 'h')
+        && string(signedIn) in signIns
+        && signIns[string(signedIn)] > request.time - duration.value(31, 'm');
     }
 
     // users/{uid}: the account's role (FR-1.5). The Worker creates it on the account's first call.
@@ -59,6 +72,12 @@ service cloud.firestore {
     // emailVerifications/{uid}: when the account was last sent a verification email (NKB-202).
     // Only the Worker uses it, to limit resends.
     match /emailVerifications/{uid} {
+      allow read, write: if false;
+    }
+
+    // sessions/{uid}: when each sign-in last called the Worker (NKB-205). Only the Worker and the
+    // rules above use it.
+    match /sessions/{uid} {
       allow read, write: if false;
     }
 
