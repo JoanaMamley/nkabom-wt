@@ -8,9 +8,9 @@ afterEach(() => {
   vi.restoreAllMocks();
 });
 
-function account(uid = 'ama') {
+function account(uid = 'ama', extra: Record<string, unknown> = {}) {
   return requireAccount(
-    new Request('https://api.test/v1/me', { headers: signedIn(uid) }),
+    new Request('https://api.test/v1/me', { headers: signedIn(uid, extra) }),
     emulatorEnv(),
   );
 }
@@ -32,9 +32,62 @@ describe('requireAccount', () => {
     const { firestore } = mockEmulators();
     firestore.docs.set('users/ama', { role: 'primaryAdmin', email: 'ama@example.com' });
 
-    await expect(account()).resolves.toMatchObject({ role: 'primaryAdmin' });
+    await expect(account('ama', { role: 'primaryAdmin' })).resolves.toMatchObject({
+      role: 'primaryAdmin',
+    });
 
     expect(firestore.commits).toEqual([]);
+  });
+
+  describe('role claim', () => {
+    // The Auth emulator, answering the claim update as well.
+    function mockClaimUpdate(status = 200) {
+      const { firestore, fetch } = mockEmulators();
+      const emulate = fetch.getMockImplementation()!;
+      const updates: unknown[] = [];
+      fetch.mockImplementation(async (input, init) => {
+        if (String(input).endsWith('accounts:update')) {
+          updates.push(JSON.parse(String(init?.body)));
+          return Response.json({}, { status });
+        }
+        return emulate(input, init);
+      });
+      return { firestore, updates };
+    }
+
+    it('is corrected when the token’s claim differs from the record', async () => {
+      const { firestore, updates } = mockClaimUpdate();
+      firestore.docs.set('users/ama', { role: 'admin' });
+
+      await expect(account('ama', { role: 'member' })).resolves.toMatchObject({ role: 'admin' });
+      await account('ama');
+
+      expect(updates).toEqual([
+        { localId: 'ama', customAttributes: '{"role":"admin"}' },
+        { localId: 'ama', customAttributes: '{"role":"admin"}' },
+      ]);
+    });
+
+    it('is left alone when it agrees, and a missing claim agrees with member', async () => {
+      const { firestore, updates } = mockClaimUpdate();
+      firestore.docs.set('users/ama', { role: 'admin' });
+      firestore.docs.set('users/kofi', { role: 'member' });
+
+      await account('ama', { role: 'admin' });
+      await account('kofi');
+
+      expect(updates).toEqual([]);
+    });
+
+    it('does not fail the call when it cannot be updated', async () => {
+      const { firestore } = mockClaimUpdate(500);
+      firestore.docs.set('users/ama', { role: 'admin' });
+      const logError = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+
+      await expect(account()).resolves.toMatchObject({ role: 'admin' });
+
+      expect(logError).toHaveBeenCalledWith('Role claim not updated', expect.anything());
+    });
   });
 
   it('stores a null email for accounts without one', async () => {

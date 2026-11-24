@@ -2,6 +2,8 @@ import type { User } from './auth';
 import type { Env } from './env';
 import { HttpError, json, readJson } from './http';
 import { signLink, verifyLink } from './links';
+import { isAdmin } from './roles';
+import type { Account } from './users';
 import { MAX_PHOTO_BYTES, PHOTO_TYPES, type PhotoType } from './model';
 
 // Member photos in the private PHOTOS Workers KV namespace (FR-2.3, FR-8.2). Nothing reads KV
@@ -52,7 +54,7 @@ export async function getPhotoUploadUrl(request: Request, env: Env, user: User):
 export async function getPhotoDownloadUrl(
   request: Request,
   env: Env,
-  user: User,
+  user: Account,
 ): Promise<Response> {
   const { path } = await readJson(request);
 
@@ -60,9 +62,9 @@ export async function getPhotoDownloadUrl(
   if (!owner) {
     throw new HttpError(400, 'Not a photo path');
   }
-  // Members see only their own photo for now. Admins (NKB-204) and the directory (NKB-601) add
-  // their own access checks here.
-  if (owner !== user.uid) {
+  // Members see only their own photo for now; the directory (NKB-601) adds its own check here.
+  // Admins see every photo, as they see every full record (FR-3.5, NKB-204).
+  if (owner !== user.uid && !isAdmin(user)) {
     throw new HttpError(403, 'You cannot view this photo');
   }
 

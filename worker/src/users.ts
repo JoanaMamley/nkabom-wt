@@ -1,8 +1,9 @@
 import { requireUser, type User } from './auth';
 import type { Env } from './env';
 import { commit, FirestoreError, getDocument, SERVER_TIME, WriteBatch } from './firestore';
+import { setRoleClaim } from './firebase-auth';
 import { HttpError } from './http';
-import { USERS } from './model';
+import { ROLES, USERS, type Role } from './model';
 
 /** The signed-in caller with the role from their users record. */
 export interface Account extends User {
@@ -22,7 +23,28 @@ export async function requireAccount(request: Request, env: Env): Promise<Accoun
   if (!user.emailVerified) {
     throw new HttpError(403, 'Verify your email address first');
   }
-  return { ...user, role: await userRole(env, user) };
+  const role = await userRole(env, user);
+  await syncRoleClaim(env, user, role);
+  return { ...user, role };
+}
+
+// The Firestore rules read the role from the token (NKB-204), so when the token's claim differs
+// from the record, which is the source of truth, correct it; the token has the new claim after its
+// next refresh. A token with no claim is a member's. A failure is logged, not raised, since the
+// Worker has read the right role itself and the rules only matter for the app's own reads.
+async function syncRoleClaim(env: Env, user: User, role: string): Promise<void> {
+  if ((user.roleClaim ?? 'member') === role || !isRole(role)) {
+    return;
+  }
+  try {
+    await setRoleClaim(env, user.uid, role);
+  } catch (error) {
+    console.error('Role claim not updated', { uid: user.uid, error: String(error) });
+  }
+}
+
+function isRole(role: string): role is Role {
+  return (ROLES as readonly string[]).includes(role);
 }
 
 async function userRole(env: Env, user: User): Promise<string> {

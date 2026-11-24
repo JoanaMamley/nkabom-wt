@@ -207,6 +207,67 @@ describe('directory', () => {
   });
 });
 
+// Admin access (NKB-204, FR-1.11): the role claim and the users record must agree.
+describe('role-based access', () => {
+  const roles = ['admin', 'primaryAdmin'];
+
+  beforeEach(async () => {
+    await seed(`${USERS}/ama`, { role: 'member', email: 'ama@example.com' });
+    await seed(`${USERS}/efua`, { role: 'admin', email: 'efua@example.com' });
+    await seed(`${USERS}/kojo`, { role: 'primaryAdmin', email: 'kojo@example.com' });
+    await seed(`${MEMBERS}/ama`, { ...newProfile(), createdAt: Timestamp.now() });
+    await seed(`${DIRECTORY}/kofi`, { firstNames: 'Kofi', surname: 'Owusu' });
+  });
+
+  it.each(roles)('lets a %s read any user, member and directory entry', async (role) => {
+    const uid = role === 'admin' ? 'efua' : 'kojo';
+    const db = as(uid, { role });
+
+    await assertSucceeds(getDoc(doc(db, USERS, 'ama')));
+    await assertSucceeds(getDocs(collection(db, USERS)));
+    await assertSucceeds(getDoc(doc(db, MEMBERS, 'ama')));
+    await assertSucceeds(getDocs(collection(db, MEMBERS)));
+    await assertSucceeds(getDoc(doc(db, DIRECTORY, 'kofi')));
+  });
+
+  it('denies a member every admin read, even one claiming an admin role', async () => {
+    for (const db of [as('ama'), as('ama', { role: 'member' }), as('ama', { role: 'admin' })]) {
+      await assertFails(getDoc(doc(db, USERS, 'efua')));
+      await assertFails(getDocs(collection(db, USERS)));
+      await assertFails(getDoc(doc(db, MEMBERS, 'kofi')));
+      await assertFails(getDocs(collection(db, MEMBERS)));
+      await assertFails(getDoc(doc(db, DIRECTORY, 'kofi')));
+    }
+  });
+
+  it('denies an admin whose users record no longer says admin, whatever the token claims', async () => {
+    await seed(`${USERS}/efua`, { role: 'member', email: 'efua@example.com' });
+
+    await assertFails(getDoc(doc(as('efua', { role: 'admin' }), MEMBERS, 'ama')));
+    await assertFails(getDoc(doc(as('efua', { role: 'primaryAdmin' }), USERS, 'ama')));
+  });
+
+  it('denies an admin record without the claim, or with an unverified email', async () => {
+    await assertFails(getDoc(doc(as('efua'), MEMBERS, 'ama')));
+    const unverified = env
+      .authenticatedContext('efua', { email_verified: false, role: 'admin' })
+      .firestore();
+    await assertFails(getDoc(doc(unverified, MEMBERS, 'ama')));
+  });
+
+  it.each(roles)('lets a %s write nothing from the app', async (role) => {
+    const db = as('efua', { role });
+
+    await assertFails(updateDoc(doc(db, USERS, 'ama'), { role: 'primaryAdmin' }));
+    await assertFails(setDoc(doc(db, USERS, 'new'), { role: 'admin', email: null }));
+    await assertFails(deleteDoc(doc(db, USERS, 'ama')));
+    await assertFails(updateDoc(doc(db, MEMBERS, 'ama'), { status: 'active' }));
+    await assertFails(deleteDoc(doc(db, MEMBERS, 'ama')));
+    await assertFails(setDoc(doc(db, DIRECTORY, 'efua'), { firstNames: 'Efua' }));
+    await assertFails(setDoc(doc(db, 'anythingElse', 'x'), { a: 1 }));
+  });
+});
+
 describe('auditLog', () => {
   const entry = {
     actor: { uid: 'efua', name: 'Efua Asante', email: 'efua@example.com' },
@@ -217,7 +278,7 @@ describe('auditLog', () => {
 
   beforeEach(() => seed(`${AUDIT_LOG}/entry1`, { ...entry, at: Timestamp.now() }));
 
-  // Role claims arrive in NKB-204; even a token claiming the top role must not touch the log.
+  // Even a Primary Admin cannot touch the log from the app.
   const primaryAdmin = () => as('efua', { role: 'primaryAdmin' });
 
   it('cannot be edited or deleted from the app', async () => {

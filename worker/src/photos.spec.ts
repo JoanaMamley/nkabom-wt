@@ -132,6 +132,17 @@ describe('POST /v1/photos/download-url', () => {
     expect(response.status).toBe(403);
   });
 
+  it("lets an admin, but no other member, view any member's photo", async () => {
+    const { firestore } = mockEmulators();
+    firestore.docs.set('users/efua', { role: 'admin' });
+    firestore.docs.set('users/kojo', { role: 'primaryAdmin' });
+
+    for (const uid of ['efua', 'kojo']) {
+      expect((await post('/v1/photos/download-url', { path: amaPhoto }, uid)).status).toBe(200);
+    }
+    expect((await post('/v1/photos/download-url', { path: amaPhoto }, 'kofi')).status).toBe(403);
+  });
+
   it('requires sign-in', async () => {
     const response = await post('/v1/photos/download-url', { path: amaPhoto }, null);
 

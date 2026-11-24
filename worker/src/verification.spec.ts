@@ -9,7 +9,13 @@ import { confirmVerification, sendVerificationEmail, VERIFY_LINK_HOURS } from '.
 
 const env = emulatorEnv({ PHOTO_LINK_KEY: 'test-link-key', EMAIL_PROVIDER: 'log' });
 const NOW = Date.parse('2026-10-31T10:00:00Z');
-const AMA: User = { uid: 'ama', name: null, email: 'ama@example.com', emailVerified: false };
+const AMA: User = {
+  uid: 'ama',
+  name: null,
+  email: 'ama@example.com',
+  emailVerified: false,
+  roleClaim: null,
+};
 
 interface FakeAccount {
   email?: string;
