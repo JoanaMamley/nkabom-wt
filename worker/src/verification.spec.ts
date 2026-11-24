@@ -1,17 +1,11 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import type { User } from './auth';
+import { MAX_EMAILS_PER_DAY, MAX_EMAILS_PER_DAY_IN_ALL, RESEND_SECONDS } from './email-limits';
 import { FakeFirestore } from './fake-firestore';
 import worker from './index';
 import { emulatorEnv, signedIn } from './test-helpers';
-import {
-  confirmVerification,
-  MAX_EMAILS_PER_DAY,
-  MAX_EMAILS_PER_DAY_IN_ALL,
-  RESEND_SECONDS,
-  sendVerificationEmail,
-  VERIFY_LINK_HOURS,
-} from './verification';
+import { confirmVerification, sendVerificationEmail, VERIFY_LINK_HOURS } from './verification';
 
 const env = emulatorEnv({ PHOTO_LINK_KEY: 'test-link-key', EMAIL_PROVIDER: 'log' });
 const NOW = Date.parse('2026-10-31T10:00:00Z');

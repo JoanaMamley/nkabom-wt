@@ -3,9 +3,10 @@ import { base64url } from 'jose';
 import type { Env } from './env';
 import { HttpError } from './http';
 
-// Signed links: photo links (photos.ts) and email verification links (verification.ts). Each kind
-// signs different parts, starting with its own first part (an HTTP method for photos,
-// 'verify-email' for verification), so a signature for one is never valid for the other.
+// Signed links: photo links (photos.ts), email verification links (verification.ts) and password
+// reset links (password-reset.ts). Each kind signs different parts, starting with its own first
+// part (an HTTP method for photos, 'verify-email' and 'reset-password' for the emailed links), so
+// a signature for one is never valid for another.
 
 /** HMAC-SHA256 over the link's parts, one per line, keyed by PHOTO_LINK_KEY. */
 export async function signLink(env: Env, parts: string[]): Promise<string> {

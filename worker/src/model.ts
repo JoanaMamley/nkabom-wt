@@ -8,6 +8,7 @@ export const DIRECTORY = 'directory';
 export const AUDIT_LOG = 'auditLog';
 export const JOB_STATUS = 'jobStatus';
 export const EMAIL_VERIFICATIONS = 'emailVerifications';
+export const PASSWORD_RESETS = 'passwordResets';
 
 // FR-1.5: a Primary Admin is an admin who can also manage admin accounts.
 export const ROLES = ['member', 'admin', 'primaryAdmin'] as const;
@@ -147,11 +148,12 @@ export interface JobStatus {
 }
 
 /**
- * emailVerifications/{uid}: when the account was last sent a verification email (NKB-202), to
- * limit how often it can ask, and emailVerifications/_all: the same for all accounts together.
- * Only the Worker reads and writes them.
+ * How often an account has been sent one kind of email, to limit how often it can ask
+ * (email-limits.ts): emailVerifications/{uid} for verification links (NKB-202) and
+ * passwordResets/{uid} for password reset links (NKB-203), each with an _all document for all
+ * accounts together. Only the Worker reads and writes them.
  */
-export interface EmailVerification {
+export interface EmailCount {
   /** Milliseconds since 1970, as Date.now() gives. */
   lastSentAt: number;
   /** The UTC day count applies to, as YYYY-MM-DD. */

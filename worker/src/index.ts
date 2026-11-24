@@ -4,6 +4,7 @@ import { sendEmail } from './email';
 import { HttpError, json } from './http';
 import { type JobMessage, queueScheduledTasks, runJobMessages } from './jobs';
 import { editProfile, register } from './members';
+import { resetPassword, sendPasswordResetEmail } from './password-reset';
 import { getPhotoDownloadUrl, getPhotoUploadUrl, servePhoto } from './photos';
 import { requireAdmin } from './roles';
 import { requireUser } from './auth';
@@ -11,8 +12,8 @@ import { type Account, requireAccount } from './users';
 import { confirmVerification, sendVerificationEmail } from './verification';
 
 // The app's API (NKB-114). Writes with side effects go through here; the app reads Firestore
-// directly. Each endpoint starts with requireAccount, except /health, the signed photo links and
-// the email verification endpoints (verification.ts).
+// directly. Each endpoint starts with requireAccount, except /health, the signed photo links, the
+// email verification endpoints (verification.ts) and the password reset ones (password-reset.ts).
 export default {
   async fetch(request, env): Promise<Response> {
     if (request.method === 'OPTIONS') {
@@ -64,6 +65,14 @@ async function route(request: Request, env: Env): Promise<Response> {
       // From the emailed link, which is the permission; no sign-in.
       allow(request, 'POST');
       return confirmVerification(request, env);
+    case '/v1/password/reset-link':
+      // For someone who cannot log in; no sign-in.
+      allow(request, 'POST');
+      return sendPasswordResetEmail(request, env);
+    case '/v1/password/reset':
+      // From the emailed link, which is the permission; no sign-in.
+      allow(request, 'POST');
+      return resetPassword(request, env);
     case '/v1/registration':
       allow(request, 'POST');
       return register(request, env, await requireAccount(request, env));

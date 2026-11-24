@@ -33,6 +33,18 @@ export const EMAIL_TEMPLATES = {
     action: { label: 'Confirm my email address', url: data.link },
   }),
 
+  /** FR-1.4: a member who forgot their password sets a new one with a one-time, expiring link. */
+  resetPassword: (data: { link: string; expiresInHours: number }) => ({
+    subject: 'Reset your Nkabom password',
+    greeting: 'Hello,',
+    paragraphs: [
+      'Someone asked to reset the password for your Nkabom account.',
+      `Choose a new password with the link below. It works once and expires in ${hours(data.expiresInHours)}.`,
+      'If you did not ask for this, you can ignore this email. Your password has not changed.',
+    ],
+    action: { label: 'Choose a new password', url: data.link },
+  }),
+
   /** FR-1.8: a new admin sets their password with a one-time, expiring link. */
   adminInvite: (data: { name: string; link: string; expiresInHours: number }) => ({
     subject: 'Set your password for Nkabom',
