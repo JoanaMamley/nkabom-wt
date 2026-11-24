@@ -136,10 +136,12 @@ describe('LoginPage', () => {
     expect(accounts.logIn).not.toHaveBeenCalled();
   });
 
-  it('links to sign-up, and shows password reset as coming soon', async () => {
+  it('links to sign-up and to password reset', async () => {
     const { page } = await render();
 
     expect(page.querySelector('a[href="/sign-up"]')?.textContent).toContain('Create an account');
-    expect(page.querySelector('[aria-disabled="true"]')?.textContent).toContain('coming soon');
+    expect(page.querySelector('a[href="/forgot-password"]')?.textContent).toContain(
+      'Forgot password?',
+    );
   });
 });

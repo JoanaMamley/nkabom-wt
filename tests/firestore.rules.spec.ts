@@ -26,6 +26,7 @@ import {
   EMAIL_VERIFICATIONS,
   JOB_STATUS,
   MEMBERS,
+  PASSWORD_RESETS,
   USERS,
 } from '../worker/src/model';
 
@@ -256,16 +257,17 @@ describe('jobStatus', () => {
   });
 });
 
-describe('emailVerifications', () => {
-  beforeEach(() =>
-    seed(`${EMAIL_VERIFICATIONS}/ama`, { lastSentAt: 0, day: '2026-10-31', count: 1 }),
-  );
+// The email counts the Worker keeps to limit resends (NKB-202, NKB-203).
+for (const collection of [EMAIL_VERIFICATIONS, PASSWORD_RESETS]) {
+  describe(collection, () => {
+    beforeEach(() => seed(`${collection}/ama`, { lastSentAt: 0, day: '2026-10-31', count: 1 }));
 
-  it('cannot be read or written from the app, even by its own account', async () => {
-    await assertFails(getDoc(doc(as('ama'), EMAIL_VERIFICATIONS, 'ama')));
-    await assertFails(updateDoc(doc(as('ama'), EMAIL_VERIFICATIONS, 'ama'), { count: 0 }));
+    it('cannot be read or written from the app, even by its own account', async () => {
+      await assertFails(getDoc(doc(as('ama'), collection, 'ama')));
+      await assertFails(updateDoc(doc(as('ama'), collection, 'ama'), { count: 0 }));
+    });
   });
-});
+}
 
 describe('an account whose email address is not verified', () => {
   // Ama is active and listed, but has signed in with an unverified address.

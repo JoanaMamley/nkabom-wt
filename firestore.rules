@@ -47,6 +47,11 @@ service cloud.firestore {
       allow read, write: if false;
     }
 
+    // passwordResets/{uid}: the same for password reset emails (NKB-203).
+    match /passwordResets/{uid} {
+      allow read, write: if false;
+    }
+
     // jobStatus/{schedule}-{task}: the last run of each scheduled task (NKB-118), written by the
     // Worker. Closed to the app; an admin view could open reads later.
     match /jobStatus/{id} {

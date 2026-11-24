@@ -3,6 +3,8 @@ import { Routes } from '@angular/router';
 import { signedOutOnly, verifiedOnly } from './core/guards';
 import { HomePage } from './home/home-page';
 import { LoginPage } from './login/login-page';
+import { ForgotPasswordPage } from './password-reset/forgot-password-page';
+import { ResetPasswordPage } from './password-reset/reset-password-page';
 import { PrivacyPage } from './privacy/privacy-page';
 import { CheckEmailPage } from './sign-up/check-email-page';
 import { SignUpPage } from './sign-up/sign-up-page';
@@ -14,7 +16,8 @@ const fullScreen = { fullScreen: true };
 export const routes: Routes = [
   { path: '', pathMatch: 'full', redirectTo: 'login' },
   // Public: login, sign-up and the privacy notice are the three pages anyone can see (FR-1.12),
-  // with the two steps that confirm a sign-up's email address (FR-1.2).
+  // with the two steps that confirm a sign-up's email address (FR-1.2) and the two that reset a
+  // forgotten password (FR-1.4).
   {
     path: 'login',
     component: LoginPage,
@@ -41,6 +44,19 @@ export const routes: Routes = [
     component: VerifyEmailPage,
     data: fullScreen,
     title: 'Confirm your email · Nkabom',
+  },
+  {
+    path: 'forgot-password',
+    component: ForgotPasswordPage,
+    canActivate: [signedOutOnly],
+    data: fullScreen,
+    title: 'Forgot password · Nkabom',
+  },
+  {
+    path: 'reset-password',
+    component: ResetPasswordPage,
+    data: fullScreen,
+    title: 'Reset password · Nkabom',
   },
   // Logged in.
   { path: 'home', component: HomePage, canActivate: [verifiedOnly], title: 'Nkabom' },

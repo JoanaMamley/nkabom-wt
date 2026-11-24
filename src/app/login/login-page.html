@@ -46,8 +46,7 @@
         <input type="checkbox" formControlName="remember" />
         Remember me
       </label>
-      <!-- Password reset arrives with NKB-203. -->
-      <span class="soon" aria-disabled="true"> Forgot password? <small>(coming soon)</small> </span>
+      <a routerLink="/forgot-password">Forgot password?</a>
     </div>
 
     @if (error(); as message) {

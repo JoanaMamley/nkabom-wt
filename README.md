@@ -188,16 +188,18 @@ The app's API is one Cloudflare Worker per environment, on the free plan at its 
 
 Writes with side effects (registration, profile edits, approvals, admin changes, mentorship, publishing, exports) go through it; the app reads Firestore directly. The code is in [worker/src/](worker/src/).
 
-Every endpoint except `/health`, the signed photo links and the two email verification endpoints starts with `requireAccount` from [worker/src/users.ts](worker/src/users.ts), so admin routes are enforced on the server, not only hidden in the app (FR-1.11). It checks the caller's Firebase ID token (`requireUser` in [worker/src/auth.ts](worker/src/auth.ts)): the token must be signed by Google, issued for that environment's project, unexpired, and name a user; otherwise the answer is `401`. An account whose email address is not yet verified gets `403` (FR-1.2, see [Sign-up and email verification](#sign-up-and-email-verification)). It then reads the caller's `users/{uid}` record for their role, and on a new account's first call creates that record as `member` (FR-1.5), so the app calls `GET /v1/me` straight after sign-up and every sign-in. The Worker reaches Firestore through its REST API, as the project's service account, which bypasses the Firestore rules the way the Admin SDK does.
+Every endpoint except `/health`, the signed photo links, the two email verification endpoints and the two password reset endpoints starts with `requireAccount` from [worker/src/users.ts](worker/src/users.ts), so admin routes are enforced on the server, not only hidden in the app (FR-1.11). It checks the caller's Firebase ID token (`requireUser` in [worker/src/auth.ts](worker/src/auth.ts)): the token must be signed by Google, issued for that environment's project, unexpired, and name a user; otherwise the answer is `401`. An account whose email address is not yet verified gets `403` (FR-1.2, see [Sign-up and email verification](#sign-up-and-email-verification)). It then reads the caller's `users/{uid}` record for their role, and on a new account's first call creates that record as `member` (FR-1.5), so the app calls `GET /v1/me` straight after sign-up and every sign-in. The Worker reaches Firestore through its REST API, as the project's service account, which bypasses the Firestore rules the way the Admin SDK does.
 
-| Endpoint                      | Needs sign-in         | Takes                                 | Returns                                                      |
-| ----------------------------- | --------------------- | ------------------------------------- | ------------------------------------------------------------ |
-| `GET /health`                 | No                    |                                       | `{ ok: true }`                                               |
-| `GET /v1/me`                  | Yes                   |                                       | `{ uid, role }`, creating the `users` record on a first call |
-| `POST /v1/registration`       | Yes                   | Every profile detail                  | `201` `{ status: "pending" }` (see [Profiles](#profiles))    |
-| `PATCH /v1/profile`           | Yes                   | Any of the profile details            | `204`                                                        |
-| `POST /v1/email/verification` | Yes, not yet verified |                                       | `{ sentTo }`, after emailing a verification link             |
-| `POST /v1/email/verify`       | No                    | `{ uid, expires, sig }` from the link | `{ verified: true }`                                         |
+| Endpoint                       | Needs sign-in         | Takes                                                 | Returns                                                      |
+| ------------------------------ | --------------------- | ----------------------------------------------------- | ------------------------------------------------------------ |
+| `GET /health`                  | No                    |                                                       | `{ ok: true }`                                               |
+| `GET /v1/me`                   | Yes                   |                                                       | `{ uid, role }`, creating the `users` record on a first call |
+| `POST /v1/registration`        | Yes                   | Every profile detail                                  | `201` `{ status: "pending" }` (see [Profiles](#profiles))    |
+| `PATCH /v1/profile`            | Yes                   | Any of the profile details                            | `204`                                                        |
+| `POST /v1/email/verification`  | Yes, not yet verified |                                                       | `{ sentTo }`, after emailing a verification link             |
+| `POST /v1/email/verify`        | No                    | `{ uid, expires, sig }` from the link                 | `{ verified: true }`                                         |
+| `POST /v1/password/reset-link` | No                    | `{ email }`                                           | `{ requested: true }`, whether or not an email went          |
+| `POST /v1/password/reset`      | No                    | `{ uid, expires, sig }` from the link, and `password` | `{ reset: true }`, or `{ email }` without a password         |
 
 The photo endpoints are listed under [Photo storage](#photo-storage), and the admin test email under [Email](#email).
 
@@ -213,22 +215,30 @@ Email sign-up (NKB-202, FR-1.1, FR-1.2) is at `/sign-up`. The app creates the Fi
 
 - **The link** carries an HMAC-SHA256 signature over the user ID, the address it was sent to and its expiry, keyed by `PHOTO_LINK_KEY` like the photo links. It expires after 24 hours (`VERIFY_LINK_HOURS`), and stops working if the account's address changes. Opening it again after it worked is harmless.
 - **Until the address is verified,** `requireAccount` answers `403` and the Firestore rules give the account nothing, so it cannot log in to any part of the site.
-- **Resends** are limited to one a minute and 5 a day per account (`RESEND_SECONDS`, `MAX_EMAILS_PER_DAY`), recorded in `emailVerifications/{uid}`, and to 100 a day across all accounts (`MAX_EMAILS_PER_DAY_IN_ALL`, in `emailVerifications/_all`), since accounts are free to create. Each send is counted in a transaction before it goes, so requests sent at the same moment cannot get past the limits, and a send that fails is not counted. Together they keep sign-ups from using up the shared Gmail allowance.
+- **Resends** are limited to one a minute and 5 a day per account (`RESEND_SECONDS`, `MAX_EMAILS_PER_DAY` in [worker/src/email-limits.ts](worker/src/email-limits.ts)), recorded in `emailVerifications/{uid}`, and to 100 a day across all accounts (`MAX_EMAILS_PER_DAY_IN_ALL`, in `emailVerifications/_all`), since accounts are free to create. Each send is counted in a transaction before it goes, so requests sent at the same moment cannot get past the limits, and a send that fails is not counted. Together they keep sign-ups from using up the shared Gmail allowance.
 - **Locally,** the email, link included, is written to the `wrangler dev` log (`EMAIL_PROVIDER` is `log`).
 - **Passwords** must be at least 8 characters in the app. Firebase's own minimum is 6; to enforce 8 on the server too, set it under **Authentication > Settings > Password policy** in each project (free).
 
+### Password reset
+
+"Forgot password?" on the login page (NKB-203, FR-1.4) leads to `/forgot-password`, which sends the address to `POST /v1/password/reset-link`. If a password account uses it, the Worker emails a link from the `resetPassword` template in [worker/src/email-templates.ts](worker/src/email-templates.ts). The link goes to the app's `/reset-password` page, which first checks it with `POST /v1/password/reset` (no password), so a used or expired link says so at once, then sends the new password the same way. The Worker sets it through Firebase Auth's REST API, which also ends the account's other sign-ins, and marks the address verified, since only its owner could open the link. Code is in [worker/src/password-reset.ts](worker/src/password-reset.ts) and [src/app/password-reset/](src/app/password-reset/).
+
+- **The link** is signed like the verification link, over the user ID, the address, the time the password was last set and its expiry. Setting the password changes that time, so each link works once, and an older link stops working once a newer one is used. Nothing is stored for it. It expires after 1 hour (`RESET_LINK_HOURS`), and the new password must be at least 8 characters, checked by the Worker too.
+- **The answer is the same** whether or not an account uses the address, and whether or not a limit held the email back, so the page does not reveal who has an account. Accounts without a password (such as a later Google login) and disabled accounts get no email.
+- **Limits** are the same as for verification emails, counted separately in `passwordResets/{uid}` and `passwordResets/_all` ([worker/src/email-limits.ts](worker/src/email-limits.ts)).
+
 ### Settings and secrets
 
-| Name                          | Kind    | Value                                                                                                                         |
-| ----------------------------- | ------- | ----------------------------------------------------------------------------------------------------------------------------- |
-| `FIREBASE_PROJECT_ID`         | setting | `nkabom-staging` or `nkabom-prod`; `demo-nkabom` locally                                                                      |
-| `ALLOWED_ORIGINS`             | setting | Origins allowed by CORS, comma-separated                                                                                      |
-| `FIRESTORE_EMULATOR_HOST`     | setting | Local only: the Firestore emulator                                                                                            |
-| `FIREBASE_AUTH_EMULATOR_HOST` | setting | Local only: the Auth emulator                                                                                                 |
-| `PHOTOS`, `BACKUPS`           | KV      | The environment's Workers KV namespaces for photos (NKB-115) and backups (NKB-119)                                            |
-| `GOOGLE_SERVICE_ACCOUNT`      | secret  | The project's Firebase service account key, the whole JSON file                                                               |
-| `PHOTO_LINK_KEY`              | secret  | A random key that signs photo links and email verification links; a fixed value locally (see [Photo storage](#photo-storage)) |
-| Email settings and secrets    |         | See [Email](#email)                                                                                                           |
+| Name                          | Kind    | Value                                                                                                                                               |
+| ----------------------------- | ------- | --------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `FIREBASE_PROJECT_ID`         | setting | `nkabom-staging` or `nkabom-prod`; `demo-nkabom` locally                                                                                            |
+| `ALLOWED_ORIGINS`             | setting | Origins allowed by CORS, comma-separated                                                                                                            |
+| `FIRESTORE_EMULATOR_HOST`     | setting | Local only: the Firestore emulator                                                                                                                  |
+| `FIREBASE_AUTH_EMULATOR_HOST` | setting | Local only: the Auth emulator                                                                                                                       |
+| `PHOTOS`, `BACKUPS`           | KV      | The environment's Workers KV namespaces for photos (NKB-115) and backups (NKB-119)                                                                  |
+| `GOOGLE_SERVICE_ACCOUNT`      | secret  | The project's Firebase service account key, the whole JSON file                                                                                     |
+| `PHOTO_LINK_KEY`              | secret  | A random key that signs photo links, email verification links and password reset links; a fixed value locally (see [Photo storage](#photo-storage)) |
+| Email settings and secrets    |         | See [Email](#email)                                                                                                                                 |
 
 Settings and KV namespace IDs are in [worker/wrangler.jsonc](worker/wrangler.jsonc). The staging and production blocks do not inherit the local ones, so the emulator settings never reach a deployed Worker, and the Worker also accepts emulator tokens only for a `demo-` project. Secrets are set per environment with `npx wrangler secret put NAME --env staging` (or `production`), run in `worker/`; each one is stored encrypted by Cloudflare and cannot be read back. Worker secrets are free.
 
@@ -281,7 +291,7 @@ Once, in `worker/`, signed in as the shared project accounts (see [docs/handbook
    openssl rand -base64 32 | npx wrangler secret put PHOTO_LINK_KEY --env production
    ```
 
-   Changing it later only ends the photo and verification links already handed out.
+   Changing it later only ends the photo, verification and password reset links already handed out.
 
 6. **Check staging** (see below).
 
