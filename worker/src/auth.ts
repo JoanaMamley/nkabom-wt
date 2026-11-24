@@ -23,6 +23,8 @@ export interface User {
   name: string | null;
   email: string | null;
   emailVerified: boolean;
+  /** The role custom claim on the token (NKB-204), or null if it has none. */
+  roleClaim: string | null;
 }
 
 // Checks the Firebase ID token. Endpoints call it through requireAccount (users.ts).
@@ -69,6 +71,7 @@ export async function verifyIdToken(
     name: typeof payload['name'] === 'string' ? payload['name'] : null,
     email: typeof payload['email'] === 'string' ? payload['email'] : null,
     emailVerified: payload['email_verified'] === true,
+    roleClaim: typeof payload['role'] === 'string' ? payload['role'] : null,
   };
 }
 

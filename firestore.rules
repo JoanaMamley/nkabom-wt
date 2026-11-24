@@ -2,7 +2,7 @@ rules_version = '2';
 
 // Default deny (FR-1.12): any path not matched below is closed. Only the Worker writes data,
 // through the service account, which the rules do not apply to; the app reads. Shapes are in
-// worker/src/model.ts. Admin access arrives with role claims in NKB-204.
+// worker/src/model.ts. Admins read through role claims (NKB-204) and write nothing from the app.
 service cloud.firestore {
   match /databases/{database}/documents {
     // Signed in with a verified email address (FR-1.2, NKB-202). Until then an account gets
@@ -15,15 +15,29 @@ service cloud.firestore {
       return isVerified() && request.auth.uid == uid;
     }
 
+    // An admin or Primary Admin (FR-1.5, FR-1.11). The role claim on the token (set by the Worker,
+    // firebase-auth.ts) must agree with the account's users record, so an account demoted or
+    // deactivated there loses admin reads at once, without waiting for its token to expire.
+    // A token with no claim is a member's. The claim is checked first, so members cost no lookup;
+    // an admin's costs one read of their own record, and an account with no record is denied.
+    function isAdmin() {
+      return isVerified()
+        && request.auth.token.get('role', 'member') in ['admin', 'primaryAdmin']
+        && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role
+          in ['admin', 'primaryAdmin'];
+    }
+
     // users/{uid}: the account's role (FR-1.5). The Worker creates it on the account's first call.
     match /users/{uid} {
       allow get: if isSelf(uid);
+      allow read: if isAdmin();
     }
 
     // members/{uid}: the member's profile. The Worker writes it (worker/src/members.ts), which
     // checks every field and keeps the directory in step, so the app can only read its own.
     match /members/{uid} {
       allow get: if isSelf(uid);
+      allow read: if isAdmin(); // FR-3.1, FR-3.5
     }
 
     // directory/{uid}: the limited profile of each active member (FR-3.1, FR-5.2), written by the
@@ -31,8 +45,9 @@ service cloud.firestore {
     // read it, and being active is what gives a member an entry of their own (FR-2.9). Members never
     // read the full record: members/{uid} stays readable only by its owner.
     match /directory/{uid} {
-      allow read: if isVerified()
-        && exists(/databases/$(database)/documents/directory/$(request.auth.uid));
+      allow read: if isAdmin()
+        || (isVerified()
+          && exists(/databases/$(database)/documents/directory/$(request.auth.uid)));
     }
 
     // auditLog/{entryId}: admin actions (FR-8.3). Only the Worker adds entries, and no one

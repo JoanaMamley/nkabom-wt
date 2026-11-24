@@ -1,5 +1,6 @@
 import { isDemoProject, type Env } from './env';
 import { getAccessToken } from './google';
+import type { Role } from './model';
 
 // Firebase Auth's REST API (Identity Toolkit v1), as the service account. Like Firestore, the
 // emulator takes "owner" as a token with admin rights.
@@ -18,6 +19,8 @@ export interface AuthAccount {
    * password (such as a Google login).
    */
   passwordUpdatedAt: number | null;
+  /** The account's custom claims. */
+  claims: Record<string, unknown>;
 }
 
 /** The account with this user ID, or null if there is none. */
@@ -43,6 +46,29 @@ export async function setPassword(env: Env, uid: string, password: string): Prom
   await post(env, 'update', { localId: uid, password, emailVerified: true });
 }
 
+/**
+ * Stores the role as a custom claim on the account (FR-1.11), which the Firestore rules read from
+ * the ID token. The users record stays the source of truth: the Worker checks it on every call and
+ * the rules check it too, so a stale claim never grants access. The token carries the new claim
+ * after its next refresh. Any other claims the account has are kept.
+ */
+export async function setRoleClaim(env: Env, uid: string, role: Role): Promise<void> {
+  const claims = (await lookupAccount(env, uid))?.claims ?? {};
+  await post(env, 'update', {
+    localId: uid,
+    customAttributes: JSON.stringify({ ...claims, role }),
+  });
+}
+
+function parseClaims(customAttributes: string | undefined): Record<string, unknown> {
+  try {
+    const claims: unknown = JSON.parse(customAttributes || '{}');
+    return claims && typeof claims === 'object' ? (claims as Record<string, unknown>) : {};
+  } catch {
+    return {};
+  }
+}
+
 function firstAccount(response: unknown): AuthAccount | null {
   const user = (
     response as {
@@ -52,6 +78,7 @@ function firstAccount(response: unknown): AuthAccount | null {
         emailVerified?: boolean;
         disabled?: boolean;
         passwordUpdatedAt?: number;
+        customAttributes?: string;
       }[];
     }
   ).users?.[0];
@@ -62,6 +89,7 @@ function firstAccount(response: unknown): AuthAccount | null {
         emailVerified: user.emailVerified === true,
         disabled: user.disabled === true,
         passwordUpdatedAt: user.passwordUpdatedAt ?? null,
+        claims: parseClaims(user.customAttributes),
       }
     : null;
 }

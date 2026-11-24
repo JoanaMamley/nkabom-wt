@@ -10,6 +10,7 @@ const admin: Account = {
   name: 'Efua Asante',
   email: 'efua@example.com',
   emailVerified: true,
+  roleClaim: null,
   role: 'admin',
 };
 

@@ -44,6 +44,7 @@ describe('verifyIdToken', () => {
       name: null,
       email: 'ama@example.com',
       emailVerified: true,
+      roleClaim: null,
     });
   });
 
