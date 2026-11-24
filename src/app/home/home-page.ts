@@ -2,6 +2,7 @@ import { Component, inject, OnInit, signal } from '@angular/core';
 import { Router } from '@angular/router';
 
 import { Accounts } from '../core/accounts';
+import { Session } from '../core/session';
 
 /**
  * Where a logged-in member lands, until the registration form (NKB-301) and the member pages
@@ -14,6 +15,7 @@ import { Accounts } from '../core/accounts';
 export class HomePage implements OnInit {
   private readonly accounts = inject(Accounts);
   private readonly router = inject(Router);
+  private readonly session = inject(Session);
 
   protected readonly email = signal<string | null>(null);
 
@@ -22,7 +24,7 @@ export class HomePage implements OnInit {
   }
 
   protected async logOut(): Promise<void> {
-    await this.accounts.signOut();
+    await this.session.logOut();
     await this.router.navigateByUrl('/login');
   }
 }

@@ -32,6 +32,24 @@ afterEach(() => {
   vi.restoreAllMocks();
 });
 
+// The session record's read and the transaction that records activity (sessions.ts), or null for
+// any other request.
+function sessionWrites(url: string): Response | null {
+  if (url.includes('/documents/sessions/')) {
+    return Response.json({ error: { status: 'NOT_FOUND' } }, { status: 404 });
+  }
+  if (url.endsWith(':beginTransaction')) {
+    return Response.json({ transaction: 'tx1' });
+  }
+  if (url.endsWith(':batchGet')) {
+    return Response.json([{ missing: 'sessions/ama' }]);
+  }
+  if (url.endsWith(':commit')) {
+    return Response.json({ commitTime: '2026-10-23T10:00:00Z' });
+  }
+  return null;
+}
+
 // Stands in for Google: its token keys, the OAuth token exchange and Firestore.
 function mockGoogle(
   usersDoc: Response = Response.json({ fields: { role: { stringValue: 'member' } } }),
@@ -50,7 +68,7 @@ function mockGoogle(
     if (url === COMMIT) {
       return Response.json({ commitTime: '2026-10-23T10:00:00Z' });
     }
-    return new Response('unexpected request', { status: 500 });
+    return sessionWrites(url) ?? new Response('unexpected request', { status: 500 });
   });
 }
 
@@ -92,7 +110,11 @@ describe('GET /v1/me', () => {
     const response = await call('/v1/me', { headers: { Authorization: `Bearer ${token}` } });
 
     expect(response.status).toBe(200);
-    expect(await response.json()).toEqual({ uid: 'ama', role: 'member' });
+    expect(await response.json()).toEqual({
+      uid: 'ama',
+      role: 'member',
+      session: { idleSeconds: 30 * 24 * 3600, expiresAt: null },
+    });
     const firestoreCall = fetch.mock.calls.find(([url]) => String(url) === USERS_DOC);
     expect(firestoreCall?.[1]?.headers).toEqual({ Authorization: 'Bearer google-access-token' });
   });
@@ -103,7 +125,11 @@ describe('GET /v1/me', () => {
 
     const response = await call('/v1/me', { headers: { Authorization: `Bearer ${token}` } });
 
-    expect(await response.json()).toEqual({ uid: 'ama', role: 'member' });
+    expect(await response.json()).toEqual({
+      uid: 'ama',
+      role: 'member',
+      session: { idleSeconds: 30 * 24 * 3600, expiresAt: null },
+    });
     const [, init] = fetch.mock.calls.find(([url]) => String(url).endsWith(':commit'))!;
     expect(JSON.parse(String(init?.body))).toEqual({
       writes: [
@@ -143,7 +169,8 @@ describe('GET /v1/me', () => {
       .mockImplementation(async (input) =>
         String(input).endsWith('accounts:lookup')
           ? Response.json({ users: [{ localId: 'ama' }] })
-          : Response.json({ fields: { role: { stringValue: 'admin' } } }),
+          : (sessionWrites(String(input)) ??
+            Response.json({ fields: { role: { stringValue: 'admin' } } })),
       );
     const token = unsignedToken(claims('demo-nkabom'));
 
@@ -153,7 +180,11 @@ describe('GET /v1/me', () => {
       emulatorEnv(),
     );
 
-    expect(await response.json()).toEqual({ uid: 'ama', role: 'admin' });
+    expect(await response.json()).toEqual({
+      uid: 'ama',
+      role: 'admin',
+      session: { idleSeconds: 30 * 60, expiresAt: expect.any(Number) },
+    });
     expect(fetch).toHaveBeenCalledWith(
       'http://127.0.0.1:8080/v1/projects/demo-nkabom/databases/(default)/documents/users/ama',
       { headers: { Authorization: 'Bearer owner' } },
@@ -262,7 +293,8 @@ describe('POST /v1/email/test', () => {
     vi.spyOn(globalThis, 'fetch').mockImplementation(async (input) =>
       String(input).endsWith('accounts:lookup')
         ? Response.json({ users: [{ localId: 'ama' }] })
-        : Response.json({ fields: { role: { stringValue: role } } }),
+        : (sessionWrites(String(input)) ??
+          Response.json({ fields: { role: { stringValue: role } } })),
     );
     return { Authorization: `Bearer ${unsignedToken(claims('demo-nkabom'))}` };
   }

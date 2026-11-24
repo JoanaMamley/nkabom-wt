@@ -23,6 +23,8 @@ export interface User {
   name: string | null;
   email: string | null;
   emailVerified: boolean;
+  /** When the user signed in, in seconds since 1970 (the token's auth_time). */
+  authTime: number;
   /** The role custom claim on the token (NKB-204), or null if it has none. */
   roleClaim: string | null;
 }
@@ -71,6 +73,7 @@ export async function verifyIdToken(
     name: typeof payload['name'] === 'string' ? payload['name'] : null,
     email: typeof payload['email'] === 'string' ? payload['email'] : null,
     emailVerified: payload['email_verified'] === true,
+    authTime: payload['auth_time'] as number,
     roleClaim: typeof payload['role'] === 'string' ? payload['role'] : null,
   };
 }

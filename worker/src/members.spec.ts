@@ -107,7 +107,7 @@ describe('POST /v1/registration', () => {
 
     expect(firestore.docs.has('directory/ama')).toBe(false);
     // One commit: the profile and the directory change are saved together.
-    expect(firestore.commits).toHaveLength(1);
+    expect(firestore.dataCommits).toHaveLength(1);
   });
 
   it('creates the users record too, for a new account', async () => {
@@ -259,8 +259,8 @@ describe('PATCH /v1/profile', () => {
       ...entry,
       courseOrOccupation: 'Site manager',
     });
-    expect(firestore.commits).toHaveLength(1);
-    expect(firestore.commits[0]).toHaveLength(2);
+    expect(firestore.dataCommits).toHaveLength(1);
+    expect(firestore.dataCommits[0]).toHaveLength(2);
   });
 
   it('leaves the directory alone when only unlisted fields change', async () => {
@@ -268,7 +268,7 @@ describe('PATCH /v1/profile', () => {
 
     await edit({ dateOfBirth: '1998-03-01' });
 
-    expect(firestore.commits[0]).toHaveLength(1);
+    expect(firestore.dataCommits[0]).toHaveLength(1);
   });
 
   it('does not list a pending member', async () => {
@@ -359,7 +359,7 @@ describe('changeProfile', () => {
     await setStatus('active');
 
     expect(firestore.docs.get('directory/ama')).toEqual(entry);
-    expect(firestore.commits).toHaveLength(1);
+    expect(firestore.dataCommits).toHaveLength(1);
   });
 
   it.each(['rejected', 'deactivated'])('removes a member who becomes %s', async (status) => {

@@ -27,6 +27,7 @@ import {
   JOB_STATUS,
   MEMBERS,
   PASSWORD_RESETS,
+  SESSIONS,
   USERS,
 } from '../worker/src/model';
 
@@ -45,9 +46,19 @@ afterAll(() => env.cleanup());
 // Every test starts from an empty database, so each one creates its collections from scratch.
 beforeEach(() => env.clearFirestore());
 
+// When the test sign-ins began, in seconds, as the ID token's auth_time gives it.
+const SIGNED_IN = Math.floor(Date.now() / 1000) - 60;
+
 // A signed-in user whose email address is verified, as every account must be (NKB-202).
 function as(uid: string, claims: Record<string, unknown> = {}) {
-  return env.authenticatedContext(uid, { email_verified: true, ...claims }).firestore();
+  return env
+    .authenticatedContext(uid, { email_verified: true, auth_time: SIGNED_IN, ...claims })
+    .firestore();
+}
+
+/** A Timestamp the given number of minutes ago. */
+function minutesAgo(minutes: number) {
+  return Timestamp.fromMillis(Date.now() - minutes * 60_000);
 }
 
 function photoOf(uid: string) {
@@ -217,6 +228,10 @@ describe('role-based access', () => {
     await seed(`${USERS}/kojo`, { role: 'primaryAdmin', email: 'kojo@example.com' });
     await seed(`${MEMBERS}/ama`, { ...newProfile(), createdAt: Timestamp.now() });
     await seed(`${DIRECTORY}/kofi`, { firstNames: 'Kofi', surname: 'Owusu' });
+    // Both admins' sign-ins called the Worker a minute ago (NKB-205).
+    for (const uid of ['efua', 'kojo']) {
+      await seed(`${SESSIONS}/${uid}`, { signIns: { [SIGNED_IN]: minutesAgo(1) } });
+    }
   });
 
   it.each(roles)('lets a %s read any user, member and directory entry', async (role) => {
@@ -253,6 +268,43 @@ describe('role-based access', () => {
       .authenticatedContext('efua', { email_verified: false, role: 'admin' })
       .firestore();
     await assertFails(getDoc(doc(unverified, MEMBERS, 'ama')));
+  });
+
+  describe('admin session expiry (FR-1.10)', () => {
+    const efua = (claims: Record<string, unknown> = {}) => as('efua', { role: 'admin', ...claims });
+
+    it('allows an admin sign-in active up to 30 minutes ago, with a minute for the Worker', async () => {
+      await seed(`${SESSIONS}/efua`, { signIns: { [SIGNED_IN]: minutesAgo(30.5) } });
+
+      await assertSucceeds(getDoc(doc(efua(), MEMBERS, 'ama')));
+    });
+
+    it('denies an admin sign-in idle for longer', async () => {
+      await seed(`${SESSIONS}/efua`, { signIns: { [SIGNED_IN]: minutesAgo(32) } });
+
+      await assertFails(getDoc(doc(efua(), MEMBERS, 'ama')));
+      await assertFails(getDocs(collection(efua(), USERS)));
+    });
+
+    it('denies an admin sign-in older than 12 hours, however active', async () => {
+      const longAgo = SIGNED_IN - 12 * 3600;
+      await seed(`${SESSIONS}/efua`, { signIns: { [longAgo]: minutesAgo(1) } });
+
+      await assertFails(getDoc(doc(efua({ auth_time: longAgo }), MEMBERS, 'ama')));
+    });
+
+    it('denies a sign-in the Worker has not seen, or with no session record', async () => {
+      await assertFails(getDoc(doc(efua({ auth_time: SIGNED_IN + 30 }), MEMBERS, 'ama')));
+      await env.withSecurityRulesDisabled((context) =>
+        deleteDoc(doc(context.firestore(), SESSIONS, 'efua')),
+      );
+      await assertFails(getDoc(doc(efua(), MEMBERS, 'ama')));
+    });
+
+    it('keeps a member’s own reads, which the Worker and the app expire', async () => {
+      await assertSucceeds(getDoc(doc(as('ama'), USERS, 'ama')));
+      await assertSucceeds(getDoc(doc(as('ama'), MEMBERS, 'ama')));
+    });
   });
 
   it.each(roles)('lets a %s write nothing from the app', async (role) => {
@@ -315,6 +367,18 @@ describe('jobStatus', () => {
     await assertFails(getDoc(doc(primaryAdmin, JOB_STATUS, 'daily-sample')));
     await assertFails(updateDoc(doc(primaryAdmin, JOB_STATUS, 'daily-sample'), { status: 'ok' }));
     await assertFails(setDoc(doc(as('ama'), JOB_STATUS, 'frequent-sample'), { status: 'ok' }));
+  });
+});
+
+describe('sessions', () => {
+  beforeEach(() => seed(`${SESSIONS}/efua`, { signIns: { [SIGNED_IN]: minutesAgo(1) } }));
+
+  it('cannot be read or written from the app, so no one can extend a session', async () => {
+    const admin = as('efua', { role: 'admin' });
+
+    await assertFails(getDoc(doc(admin, SESSIONS, 'efua')));
+    await assertFails(setDoc(doc(admin, SESSIONS, 'efua'), { signIns: {} }));
+    await assertFails(setDoc(doc(as('ama'), SESSIONS, 'ama'), { signIns: {} }));
   });
 });
 

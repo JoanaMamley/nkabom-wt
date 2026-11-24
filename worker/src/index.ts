@@ -52,10 +52,11 @@ async function route(request: Request, env: Env): Promise<Response> {
       allow(request, 'GET');
       return json({ ok: true });
     case '/v1/me': {
-      // The app calls this after every sign-in, which also creates a new account's users record.
+      // The app calls this after every sign-in, which also creates a new account's users record,
+      // and while it is in use, which keeps the sign-in from expiring (sessions.ts).
       allow(request, 'GET');
-      const { uid, role } = await requireAccount(request, env);
-      return json({ uid, role });
+      const { uid, role, session } = await requireAccount(request, env);
+      return json({ uid, role, session });
     }
     case '/v1/email/verification':
       // Before the address is verified, so it checks the sign-in only (verification.ts).

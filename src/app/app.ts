@@ -12,6 +12,7 @@ import { filter, map } from 'rxjs';
 
 import { AppUpdates } from './core/app-updates';
 import { Connectivity } from './core/connectivity';
+import { Session } from './core/session';
 import { OfflinePage } from './offline/offline-page';
 import { ThemeToggle } from './theme-toggle/theme-toggle';
 
@@ -27,6 +28,11 @@ export class App {
 
   private readonly router = inject(Router);
   private readonly route = inject(ActivatedRoute);
+
+  constructor() {
+    // A saved sign-in may have expired while the app was closed (NKB-205).
+    void inject(Session).resume();
+  }
 
   /** Whether the page brings its own layout (route data fullScreen), so the header and footer hide. */
   protected readonly fullScreen = toSignal(

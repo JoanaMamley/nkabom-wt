@@ -14,6 +14,7 @@ const AMA: User = {
   name: null,
   email: 'ama@example.com',
   emailVerified: false,
+  authTime: 1_790_000_000,
   roleClaim: null,
 };
 

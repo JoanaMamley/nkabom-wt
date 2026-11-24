@@ -4,11 +4,14 @@ import { commit, FirestoreError, getDocument, SERVER_TIME, WriteBatch } from './
 import { setRoleClaim } from './firebase-auth';
 import { HttpError } from './http';
 import { ROLES, USERS, type Role } from './model';
+import { type SessionInfo, touchSession } from './sessions';
 
 /** The signed-in caller with the role from their users record. */
 export interface Account extends User {
   /** One of ROLES, as stored. Check it with requireAdmin rather than comparing it here. */
   role: string;
+  /** The sign-in's limits (NKB-205). */
+  session: SessionInfo;
 }
 
 /**
@@ -16,7 +19,8 @@ export interface Account extends User {
  * reads the caller's users record, so the role is current on every call and a removed admin loses
  * access at once. The first call from a new account creates its record as a member, which is why
  * the app calls GET /v1/me straight after sign-up. An account whose email address is not yet
- * verified is refused, so it cannot log in (FR-1.2, verification.ts).
+ * verified is refused, so it cannot log in (FR-1.2, verification.ts). A sign-in that has expired
+ * is refused with 401, and otherwise its activity is recorded (FR-1.10, sessions.ts).
  */
 export async function requireAccount(request: Request, env: Env): Promise<Account> {
   const user = await requireUser(request, env);
@@ -24,8 +28,9 @@ export async function requireAccount(request: Request, env: Env): Promise<Accoun
     throw new HttpError(403, 'Verify your email address first');
   }
   const role = await userRole(env, user);
+  const session = await touchSession(env, user, role);
   await syncRoleClaim(env, user, role);
-  return { ...user, role };
+  return { ...user, role, session };
 }
 
 // The Firestore rules read the role from the token (NKB-204), so when the token's claim differs
