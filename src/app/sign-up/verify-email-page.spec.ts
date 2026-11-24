@@ -12,9 +12,23 @@ describe('VerifyEmailPage', () => {
   const api = { post: vi.fn() };
   let user: {
     uid: string;
+    emailVerified?: boolean;
     reload: ReturnType<typeof vi.fn>;
     getIdToken: ReturnType<typeof vi.fn>;
   } | null;
+
+  /** This device signed in as Ama, whose address shows as verified once reloaded. */
+  function signedInUser() {
+    const signedIn = {
+      uid: 'ama',
+      emailVerified: false,
+      reload: vi.fn(async () => {
+        signedIn.emailVerified = true;
+      }),
+      getIdToken: vi.fn(),
+    };
+    return signedIn;
+  }
 
   beforeEach(() => {
     api.post.mockReset().mockResolvedValue({ verified: true });
@@ -49,7 +63,7 @@ describe('VerifyEmailPage', () => {
   });
 
   it('refreshes the sign-in and offers to carry on on the device that signed up', async () => {
-    user = { uid: 'ama', reload: vi.fn(), getIdToken: vi.fn() };
+    user = signedInUser();
     const page = await render();
 
     expect(user.getIdToken).toHaveBeenCalledWith(true);
@@ -75,7 +89,7 @@ describe('VerifyEmailPage', () => {
   });
 
   it('offers a new link when the expired link is for this device’s sign-in', async () => {
-    user = { uid: 'ama', reload: vi.fn(), getIdToken: vi.fn() };
+    user = signedInUser();
     api.post.mockRejectedValue(new ApiError(410, 'This link has expired'));
     const page = await render();
 

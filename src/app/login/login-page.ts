@@ -5,22 +5,19 @@ import { Router, RouterLink } from '@angular/router';
 import { AuthLayout } from '../auth-layout/auth-layout';
 import { Accounts } from '../core/accounts';
 import { Api, ApiError } from '../core/api';
+import { authErrorMessage } from '../core/messages';
 import { RevealPassword } from '../reveal-password/reveal-password';
 import { Verification } from '../sign-up/verification';
 
-// Firebase Auth's error codes, in words a member can act on. Wrong email and wrong password get
-// the same answer, so the page does not reveal which addresses have accounts.
+// Firebase Auth's error codes for login, beside the shared ones (core/messages.ts). Wrong email and
+// wrong password get the same answer, so the page does not reveal which addresses have accounts.
 const LOGIN_ERRORS: Record<string, string> = {
   // Projects with email enumeration protection (staging and production) answer invalid-credential
   // for both; the emulator still answers user-not-found or wrong-password.
   'auth/invalid-credential': 'The email address or password is not right.',
   'auth/user-not-found': 'The email address or password is not right.',
   'auth/wrong-password': 'The email address or password is not right.',
-  'auth/invalid-email': 'Enter a valid email address.',
   'auth/user-disabled': 'This account has been turned off. Please contact the executives.',
-  'auth/network-request-failed':
-    'Nkabom could not be reached. Check your connection and try again.',
-  'auth/too-many-requests': 'Too many attempts from this device. Please try again later.',
 };
 
 /** The time of day on this device, for the greeting. */
@@ -77,12 +74,12 @@ export class LoginPage {
       await this.router.navigateByUrl('/home');
     } catch (error) {
       if (error instanceof ApiError) {
-        // Logged in to Firebase, but the Worker refused or could not be reached.
-        await this.accounts.signOut();
+        // Logged in to Firebase, but the Worker refused or could not be reached. Signing out
+        // can fail too, offline; the message and the form must still come back.
+        await this.accounts.signOut().catch(() => undefined);
         this.error.set(error.message);
       } else {
-        const code = (error as { code?: string }).code ?? '';
-        this.error.set(LOGIN_ERRORS[code] ?? 'Something went wrong. Please try again.');
+        this.error.set(authErrorMessage(error, LOGIN_ERRORS));
       }
       this.busy.set(false);
     }

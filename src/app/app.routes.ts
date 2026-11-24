@@ -60,4 +60,6 @@ export const routes: Routes = [
   },
   // Logged in.
   { path: 'home', component: HomePage, canActivate: [verifiedOnly], title: 'Nkabom' },
+  // A mistyped or old address goes to login, which sends anyone logged in on to their home page.
+  { path: '**', redirectTo: 'login' },
 ];

@@ -2,7 +2,8 @@ import { Component, inject, OnInit, PendingTasks, signal } from '@angular/core';
 import { Router, RouterLink } from '@angular/router';
 
 import { AuthLayout } from '../auth-layout/auth-layout';
-import { Accounts } from '../core/accounts';
+import { Accounts, refreshSignIn } from '../core/accounts';
+import { UNREACHABLE } from '../core/messages';
 import { Verification } from './verification';
 
 /**
@@ -62,10 +63,8 @@ export class CheckEmailPage implements OnInit {
         this.busy.set(false);
         return;
       }
-      await user.reload();
+      await refreshSignIn(user);
       if (user.emailVerified) {
-        // A new ID token, so the Worker and the rules see the verified address.
-        await user.getIdToken(true);
         await this.router.navigateByUrl('/home');
         return;
       }
@@ -73,7 +72,7 @@ export class CheckEmailPage implements OnInit {
         'Your email address is not confirmed yet. Open the link in the email we sent you.',
       );
     } catch {
-      this.message.set('Nkabom could not be reached. Check your connection and try again.');
+      this.message.set(UNREACHABLE);
     }
     this.busy.set(false);
   }

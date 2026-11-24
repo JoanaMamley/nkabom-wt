@@ -11,8 +11,8 @@ import { ActivatedRoute, RouterLink } from '@angular/router';
 import { AuthLayout } from '../auth-layout/auth-layout';
 import { Accounts } from '../core/accounts';
 import { Api, ApiError } from '../core/api';
+import { MIN_PASSWORD_LENGTH, SOMETHING_WENT_WRONG } from '../core/messages';
 import { RevealPassword } from '../reveal-password/reveal-password';
-import { MIN_PASSWORD_LENGTH } from '../sign-up/sign-up-page';
 
 type State = 'checking' | 'ready' | 'done' | 'expired' | 'invalid' | 'error';
 
@@ -82,15 +82,17 @@ export class ResetPasswordPage implements OnInit {
       if (error instanceof ApiError && error.status === 410) {
         this.state.set('expired');
       } else {
-        this.error.set(
-          error instanceof ApiError ? error.message : 'Something went wrong. Please try again.',
-        );
+        this.error.set(error instanceof ApiError ? error.message : SOMETHING_WENT_WRONG);
       }
       this.busy.set(false);
       return;
     }
-    // Firebase has ended the account's sign-ins; any left on this device are stale.
-    await this.accounts.signOut().catch(() => undefined);
+    // Firebase has ended the account's sign-ins, so one on this device is stale. Someone signed in
+    // here as a different account stays signed in.
+    const user = await this.accounts.currentUser().catch(() => null);
+    if (user?.uid === this.link.uid) {
+      await this.accounts.signOut().catch(() => undefined);
+    }
     this.state.set('done');
   }
 

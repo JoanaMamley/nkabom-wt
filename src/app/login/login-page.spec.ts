@@ -24,7 +24,7 @@ describe('LoginPage', () => {
 
   beforeEach(() => {
     accounts.logIn.mockReset().mockResolvedValue({ emailVerified: true });
-    accounts.signOut.mockReset();
+    accounts.signOut.mockReset().mockResolvedValue(undefined);
     api.get.mockReset().mockResolvedValue({ uid: 'ama', role: 'member' });
     TestBed.configureTestingModule({
       imports: [LoginPage],
@@ -124,6 +124,17 @@ describe('LoginPage', () => {
 
     expect(accounts.signOut).toHaveBeenCalled();
     expect(page.querySelector('[role="alert"]')?.textContent).toContain('could not be reached');
+  });
+
+  it('still shows the error and the form when signing out again fails too', async () => {
+    api.get.mockRejectedValue(new ApiError(0, 'Nkabom could not be reached.'));
+    accounts.signOut.mockRejectedValue(new Error('offline'));
+    const { page, logIn } = await render();
+
+    await logIn('ama@example.com', 'correct horse');
+
+    expect(page.querySelector('[role="alert"]')?.textContent).toContain('could not be reached');
+    expect(page.querySelector<HTMLButtonElement>('button[type="submit"]')!.disabled).toBe(false);
   });
 
   it('shows inline errors and does not try with empty fields', async () => {

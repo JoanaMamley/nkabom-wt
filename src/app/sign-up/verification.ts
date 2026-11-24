@@ -1,6 +1,7 @@
 import { inject, Injectable, signal } from '@angular/core';
 
 import { Api, ApiError } from '../core/api';
+import { SOMETHING_WENT_WRONG } from '../core/messages';
 
 /**
  * Sends the email verification link (FR-1.2) through the Worker, which signs and emails it
@@ -21,9 +22,7 @@ export class Verification {
       this.sendError.set(null);
       return true;
     } catch (error) {
-      this.sendError.set(
-        error instanceof ApiError ? error.message : 'Something went wrong. Please try again.',
-      );
+      this.sendError.set(error instanceof ApiError ? error.message : SOMETHING_WENT_WRONG);
       return false;
     }
   }

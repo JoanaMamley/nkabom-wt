@@ -2,7 +2,7 @@ import { Component, inject, OnInit, PendingTasks, signal } from '@angular/core';
 import { ActivatedRoute, RouterLink } from '@angular/router';
 
 import { AuthLayout } from '../auth-layout/auth-layout';
-import { Accounts } from '../core/accounts';
+import { Accounts, refreshSignIn } from '../core/accounts';
 import { Api, ApiError } from '../core/api';
 
 type State = 'verifying' | 'verified' | 'expired' | 'invalid' | 'error';
@@ -47,14 +47,8 @@ export class VerifyEmailPage implements OnInit {
       return;
     }
     if (user && this.signedIn()) {
-      // A new ID token, so the Worker and the rules see the verified address. The address is
-      // verified either way; if this fails, the next login picks it up.
-      try {
-        await user.reload();
-        await user.getIdToken(true);
-      } catch {
-        // Nothing to do.
-      }
+      // The address is verified either way; if this fails, the next login picks it up.
+      await refreshSignIn(user).catch(() => undefined);
     }
     this.state.set('verified');
   }
