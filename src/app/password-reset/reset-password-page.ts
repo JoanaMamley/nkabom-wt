@@ -1,5 +1,11 @@
 import { Component, inject, OnInit, PendingTasks, signal } from '@angular/core';
-import { NonNullableFormBuilder, ReactiveFormsModule, Validators } from '@angular/forms';
+import {
+  type AbstractControl,
+  NonNullableFormBuilder,
+  ReactiveFormsModule,
+  type ValidationErrors,
+  Validators,
+} from '@angular/forms';
 import { ActivatedRoute, RouterLink } from '@angular/router';
 
 import { AuthLayout } from '../auth-layout/auth-layout';
@@ -27,9 +33,13 @@ export class ResetPasswordPage implements OnInit {
   private readonly pendingTasks = inject(PendingTasks);
 
   protected readonly minPasswordLength = MIN_PASSWORD_LENGTH;
-  protected readonly form = inject(NonNullableFormBuilder).group({
-    password: ['', [Validators.required, Validators.minLength(MIN_PASSWORD_LENGTH)]],
-  });
+  protected readonly form = inject(NonNullableFormBuilder).group(
+    {
+      password: ['', [Validators.required, Validators.minLength(MIN_PASSWORD_LENGTH)]],
+      confirmPassword: ['', Validators.required],
+    },
+    { validators: passwordsMatch },
+  );
   protected readonly state = signal<State>('checking');
   /** The address the link is for, so the member knows which account they are changing. */
   protected readonly email = signal<string | null>(null);
@@ -66,7 +76,8 @@ export class ResetPasswordPage implements OnInit {
     this.error.set(null);
 
     try {
-      await this.api.post('/v1/password/reset', { ...this.link, ...this.form.getRawValue() });
+      const { password } = this.form.getRawValue();
+      await this.api.post('/v1/password/reset', { ...this.link, password });
     } catch (error) {
       if (error instanceof ApiError && error.status === 410) {
         this.state.set('expired');
@@ -86,6 +97,21 @@ export class ResetPasswordPage implements OnInit {
   protected invalid(): boolean {
     return this.submitted() && this.form.controls.password.invalid;
   }
+
+  /** The confirmation is empty, or does not match the new password. */
+  protected mismatch(): boolean {
+    return (
+      this.submitted() &&
+      this.form.controls.password.valid &&
+      (this.form.controls.confirmPassword.invalid || this.form.hasError('mismatch'))
+    );
+  }
+}
+
+/** The new password typed twice the same, so a typing slip cannot lock the member out. */
+function passwordsMatch(group: AbstractControl): ValidationErrors | null {
+  const { password, confirmPassword } = group.value as Record<string, string>;
+  return password === confirmPassword ? null : { mismatch: true };
 }
 
 function stateFor(error: unknown): State {

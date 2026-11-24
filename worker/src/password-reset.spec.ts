@@ -115,6 +115,18 @@ describe('sendPasswordResetEmail', () => {
     expect(Number(link.searchParams.get('expires'))).toBe(NOW / 1000 + RESET_LINK_HOURS * 3600);
   });
 
+  it('greets a registered member by first name, and anyone else without one', async () => {
+    await askForLink('ama@example.com');
+    let [, email] = log.mock.calls.at(-1) as [string, { text: string }];
+    expect(email.text).toMatch(/^Hello there,/);
+
+    firestore.docs.set('members/ama', { firstNames: 'Ama Serwaa', surname: 'Mensah' });
+    await askForLink('ama@example.com', NOW + RESEND_SECONDS * 1000);
+    [, email] = log.mock.calls.at(-1) as [string, { text: string }];
+    expect(email.text).toMatch(/^Hello Ama Serwaa,/);
+    expect(email.text).not.toContain('Mensah');
+  });
+
   it('answers the same and sends nothing when no password account uses the address', async () => {
     accounts.set('kofi', { email: 'kofi@example.com', emailVerified: true });
     accounts.set('esi', { ...accounts.get('ama')!, email: 'esi@example.com', disabled: true });
