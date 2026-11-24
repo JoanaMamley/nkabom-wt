@@ -54,6 +54,13 @@ describe('App', () => {
     expect(compiled.querySelector('main h1')?.textContent).toContain('Log in');
   });
 
+  it('sends a mistyped or old address to the login page', async () => {
+    const compiled = await render('/logn');
+
+    expect(TestBed.inject(Router).url).toBe('/login');
+    expect(compiled.querySelector('main h1')?.textContent).toContain('Log in');
+  });
+
   it('gives the login page the whole screen, with its own toggle and privacy link', async () => {
     const compiled = await render('/login');
 

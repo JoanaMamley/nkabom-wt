@@ -40,3 +40,14 @@ export class Accounts {
     return signOut(this.auth);
   }
 }
+
+/**
+ * Reloads the user, to see an email address verified meanwhile (possibly on another device), and
+ * then takes a new ID token, so the Worker and the rules see it too.
+ */
+export async function refreshSignIn(user: User): Promise<void> {
+  await user.reload();
+  if (user.emailVerified) {
+    await user.getIdToken(true);
+  }
+}

@@ -10,11 +10,14 @@ import { ResetPasswordPage } from './reset-password-page';
 describe('ResetPasswordPage', () => {
   const LINK = { uid: 'ama', expires: '1793440800', sig: 'signature' };
   const api = { post: vi.fn() };
-  const accounts = { signOut: vi.fn() };
+  let signedInAs: { uid: string } | null;
+  const accounts = { signOut: vi.fn(), currentUser: vi.fn(async () => signedInAs) };
 
   beforeEach(() => {
     api.post.mockReset().mockResolvedValue({ email: 'ama@example.com' });
     accounts.signOut.mockReset().mockResolvedValue(undefined);
+    // This device is signed in as the account being reset.
+    signedInAs = { uid: LINK.uid };
     TestBed.configureTestingModule({
       imports: [ResetPasswordPage],
       providers: [
@@ -73,6 +76,17 @@ describe('ResetPasswordPage', () => {
     expect(accounts.signOut).toHaveBeenCalled();
     expect(page.querySelector('h1')?.textContent).toContain('Password changed');
     expect(page.querySelector('a.button')?.getAttribute('href')).toBe('/login');
+  });
+
+  it('leaves a different account signed in on this device', async () => {
+    signedInAs = { uid: 'kofi' };
+    const { page, choose } = await render();
+    api.post.mockResolvedValue({ reset: true });
+
+    await choose('correct horse');
+
+    expect(accounts.signOut).not.toHaveBeenCalled();
+    expect(page.querySelector('h1')?.textContent).toContain('Password changed');
   });
 
   it('sends nothing with a short password', async () => {

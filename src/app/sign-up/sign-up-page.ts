@@ -4,21 +4,15 @@ import { Router, RouterLink } from '@angular/router';
 
 import { AuthLayout } from '../auth-layout/auth-layout';
 import { Accounts } from '../core/accounts';
+import { authErrorMessage, MIN_PASSWORD_LENGTH } from '../core/messages';
 import { PrivacySummary } from '../privacy/privacy-summary';
 import { RevealPassword } from '../reveal-password/reveal-password';
 import { Verification } from './verification';
 
-/** The shortest password allowed. Firebase's own minimum is 6. */
-export const MIN_PASSWORD_LENGTH = 8;
-
-// Firebase Auth's error codes, in words a member can act on.
+// Firebase Auth's error codes for sign-up, beside the shared ones (core/messages.ts).
 const SIGN_UP_ERRORS: Record<string, string> = {
   'auth/email-already-in-use': 'An account already uses this email address.',
-  'auth/invalid-email': 'Enter a valid email address.',
   'auth/weak-password': `Choose a password of at least ${MIN_PASSWORD_LENGTH} characters.`,
-  'auth/network-request-failed':
-    'Nkabom could not be reached. Check your connection and try again.',
-  'auth/too-many-requests': 'Too many attempts from this device. Please try again later.',
 };
 
 /**
@@ -58,8 +52,7 @@ export class SignUpPage {
     try {
       await this.accounts.signUp(email.trim(), password);
     } catch (error) {
-      const code = (error as { code?: string }).code ?? '';
-      this.error.set(SIGN_UP_ERRORS[code] ?? 'Something went wrong. Please try again.');
+      this.error.set(authErrorMessage(error, SIGN_UP_ERRORS));
       this.busy.set(false);
       return;
     }

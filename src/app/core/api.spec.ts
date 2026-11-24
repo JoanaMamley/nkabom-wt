@@ -1,6 +1,6 @@
 import { TestBed } from '@angular/core/testing';
 
-import { Api, API_URL, ApiError } from './api';
+import { Api, API_TIMEOUT_MS, API_URL, ApiError } from './api';
 import { FIREBASE_AUTH } from './firebase';
 
 describe('Api', () => {
@@ -54,6 +54,40 @@ describe('Api', () => {
     await expect(TestBed.inject(Api).post('/v1/thing')).rejects.toEqual(
       new ApiError(410, 'This link has expired'),
     );
+  });
+
+  it('gives up after the time limit, so a stalled request cannot leave a page waiting', async () => {
+    vi.useFakeTimers();
+    // Never answers, until aborted.
+    fetch.mockImplementation(
+      (_url: unknown, init?: RequestInit) =>
+        new Promise((_resolve, reject) =>
+          init!.signal!.addEventListener('abort', () =>
+            reject(new DOMException('Aborted', 'AbortError')),
+          ),
+        ),
+    );
+
+    const result = TestBed.inject(Api)
+      .post('/v1/thing')
+      .catch((e: unknown) => e);
+    await vi.advanceTimersByTimeAsync(API_TIMEOUT_MS);
+
+    expect(await result).toEqual(
+      new ApiError(0, 'Nkabom could not be reached. Check your connection and try again.'),
+    );
+    vi.useRealTimers();
+  });
+
+  it('counts a sign-in that cannot be renewed as unreachable', async () => {
+    currentUser = { getIdToken: () => Promise.reject(new Error('auth/network-request-failed')) };
+
+    const error = await TestBed.inject(Api)
+      .post('/v1/thing')
+      .catch((e: unknown) => e);
+
+    expect((error as ApiError).status).toBe(0);
+    expect(fetch).not.toHaveBeenCalled();
   });
 
   it('throws status 0 when the Worker cannot be reached', async () => {

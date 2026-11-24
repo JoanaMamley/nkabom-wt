@@ -2,6 +2,13 @@ import { inject, Injectable, InjectionToken } from '@angular/core';
 
 import { environment } from '../../environments/environment';
 import { FIREBASE_AUTH } from './firebase';
+import { SOMETHING_WENT_WRONG, UNREACHABLE } from './messages';
+
+/**
+ * How long to wait for the Worker. A request on a weak connection can stall without failing, and
+ * would otherwise leave its page waiting for good (FR-8.1).
+ */
+export const API_TIMEOUT_MS = 20_000;
 
 export const API_URL = new InjectionToken<string>('API_URL', {
   providedIn: 'root',
@@ -35,19 +42,38 @@ export class Api {
   private async request<T>(method: string, path: string, body?: string): Promise<T> {
     const headers: Record<string, string> = { 'Content-Type': 'application/json' };
     const user = this.auth.currentUser;
-    if (user) {
-      headers['Authorization'] = `Bearer ${await user.getIdToken()}`;
-    }
+    // A timer and AbortController rather than AbortSignal.timeout, which Safari has only from
+    // iOS 16, and older iPhones stop at iOS 15.
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), API_TIMEOUT_MS);
 
     let response: Response;
+    let data: { error?: string };
     try {
-      response = await fetch(`${this.url}${path}`, { method, headers, body });
+      // Getting the ID token can need the network too, to renew an old one.
+      if (user) {
+        headers['Authorization'] = `Bearer ${await user.getIdToken()}`;
+      }
+      response = await fetch(`${this.url}${path}`, {
+        method,
+        headers,
+        body,
+        signal: controller.signal,
+      });
+      // Read within the time limit too: the body can stall after the headers arrive.
+      data = (await response.json().catch((error: unknown) => {
+        if (controller.signal.aborted) {
+          throw error;
+        }
+        return {}; // No JSON body, as with 204.
+      })) as { error?: string };
     } catch {
-      throw new ApiError(0, 'Nkabom could not be reached. Check your connection and try again.');
+      throw new ApiError(0, UNREACHABLE);
+    } finally {
+      clearTimeout(timer);
     }
-    const data = (await response.json().catch(() => ({}))) as { error?: string };
     if (!response.ok) {
-      throw new ApiError(response.status, data.error ?? 'Something went wrong. Please try again.');
+      throw new ApiError(response.status, data.error ?? SOMETHING_WENT_WRONG);
     }
     return data as T;
   }

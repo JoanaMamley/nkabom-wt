@@ -4,6 +4,7 @@ import { RouterLink } from '@angular/router';
 
 import { AuthLayout } from '../auth-layout/auth-layout';
 import { Api, ApiError } from '../core/api';
+import { SOMETHING_WENT_WRONG } from '../core/messages';
 
 /**
  * "Forgot password?" from the login page (FR-1.4, NKB-203): asks the Worker to email a reset link
@@ -40,9 +41,7 @@ export class ForgotPasswordPage {
       await this.api.post('/v1/password/reset-link', { email });
       this.sentTo.set(email);
     } catch (error) {
-      this.error.set(
-        error instanceof ApiError ? error.message : 'Something went wrong. Please try again.',
-      );
+      this.error.set(error instanceof ApiError ? error.message : SOMETHING_WENT_WRONG);
     }
     this.busy.set(false);
   }
