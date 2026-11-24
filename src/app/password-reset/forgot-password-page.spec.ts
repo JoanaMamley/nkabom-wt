@@ -46,7 +46,7 @@ describe('ForgotPasswordPage', () => {
       email: 'ama@example.com',
     });
     expect(page.querySelector('h1')?.textContent).toContain('Check your email');
-    expect(page.textContent).toContain('If an account uses ama@example.com');
+    expect(page.textContent).toContain("We've sent a password reset link to ama@example.com.");
   });
 
   it('asks for nothing with a bad email address', async () => {

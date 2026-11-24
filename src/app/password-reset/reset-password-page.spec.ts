@@ -35,10 +35,16 @@ describe('ResetPasswordPage', () => {
     await fixture.whenStable();
     const page = fixture.nativeElement as HTMLElement;
 
-    async function choose(password: string) {
-      const input = page.querySelector<HTMLInputElement>('#password')!;
-      input.value = password;
-      input.dispatchEvent(new Event('input'));
+    // Types the new password, and the same again to confirm it unless told otherwise.
+    async function choose(password: string, confirmation = password) {
+      for (const [id, value] of [
+        ['password', password],
+        ['confirm-password', confirmation],
+      ]) {
+        const input = page.querySelector<HTMLInputElement>(`#${id}`)!;
+        input.value = value;
+        input.dispatchEvent(new Event('input'));
+      }
       page.querySelector('form')!.dispatchEvent(new Event('submit'));
       await fixture.whenStable();
     }
@@ -76,6 +82,28 @@ describe('ResetPasswordPage', () => {
 
     expect(page.querySelector('#password-hint')?.classList).toContain('field-error');
     expect(api.post).toHaveBeenCalledTimes(1);
+  });
+
+  it('sends nothing until the confirmation matches the new password', async () => {
+    const { page, choose } = await render();
+
+    await choose('correct horse', 'correct hrose');
+
+    expect(page.querySelector('#confirm-error')?.textContent).toContain(
+      'The passwords do not match.',
+    );
+    expect(page.querySelector('#confirm-password')?.getAttribute('aria-invalid')).toBe('true');
+    expect(api.post).toHaveBeenCalledTimes(1);
+
+    await choose('correct horse', '');
+    expect(page.querySelector('#confirm-error')).not.toBeNull();
+    expect(api.post).toHaveBeenCalledTimes(1);
+  });
+
+  it('has an eye button on both password fields', async () => {
+    const { page } = await render();
+
+    expect(page.querySelectorAll('app-reveal-password')).toHaveLength(2);
   });
 
   it('shows the Worker’s error, such as when the link was used in another tab', async () => {

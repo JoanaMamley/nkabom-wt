@@ -8,9 +8,10 @@ import {
   setPassword,
   type AuthAccount,
 } from './firebase-auth';
+import { getDocument } from './firestore';
 import { HttpError, json, readJson } from './http';
 import { signLink, verifyLink } from './links';
-import { PASSWORD_RESETS } from './model';
+import { MEMBERS, PASSWORD_RESETS } from './model';
 
 // Password reset (FR-1.4, NKB-203). Like email verification (verification.ts), the Worker sends its
 // own signed link with a template from email-templates.ts (FR-8.5). The signature covers when the
@@ -43,6 +44,10 @@ export async function sendPasswordResetEmail(
   if (!account?.email || account.passwordUpdatedAt === null || account.disabled) {
     return json({ requested: true });
   }
+  // The first name from the member's profile, for the greeting. An account that has not registered
+  // yet has none, and is greeted without it.
+  const profile = await getDocument(env, `${MEMBERS}/${account.uid}`);
+  const firstName = typeof profile?.['firstNames'] === 'string' ? profile['firstNames'] : undefined;
   const counted = await countEmail(env, PASSWORD_RESETS, account.uid, now);
   if (counted.refused) {
     return json({ requested: true });
@@ -53,6 +58,7 @@ export async function sendPasswordResetEmail(
   const link = `${env.APP_URL}/reset-password?${new URLSearchParams({ uid: account.uid, expires, sig })}`;
   try {
     await sendEmail(env, { email: account.email }, 'resetPassword', {
+      firstName,
       link,
       expiresInHours: RESET_LINK_HOURS,
     });
