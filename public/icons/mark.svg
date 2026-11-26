@@ -1,0 +1,14 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="506 466 271 361">
+  <!-- The centre symbol of the WomenTrust Graduate Association logo (public/images/logo.svg),
+       drawn from measurements of it: everything white in the mask is orange, everything black is a
+       hole. Run npm run icons after changing it. -->
+  <mask id="m">
+    <circle cx="641.5" cy="646" r="129.5" fill="#fff"/>
+    <circle cx="641.5" cy="504.5" r="33.5" fill="#fff"/>
+    <path fill="#fff" d="M536.5 524H746.5L727.5 552H555.5ZM536.5 768H746.5L727.5 740H555.5ZM608.5 740H674.5V809A12 12 0 0 1 662.5 821H620.5A12 12 0 0 1 608.5 809Z"/>
+    <rect x="614.5" y="547.5" width="54" height="49" rx="9" fill="#000"/>
+    <ellipse cx="641.5" cy="722" rx="30" ry="25" fill="#000"/>
+    <path fill="#000" d="M587.52 588.31L638 646L587.52 703.69A79 79 0 0 1 587.52 588.31ZM695.48 588.31L645 646L695.48 703.69A79 79 0 0 0 695.48 588.31Z"/>
+  </mask>
+  <rect x="506" y="466" width="271" height="361" fill="#d45b26" mask="url(#m)"/>
+</svg>

@@ -79,6 +79,22 @@ describe('App', () => {
     expect((fixture.nativeElement as HTMLElement).querySelector('header')).toBeNull();
   });
 
+  it('shows the WomenTrust Graduate Association logo beside the login form', async () => {
+    const compiled = await render('/login');
+
+    const logo = compiled.querySelector<HTMLImageElement>('app-auth-layout img.logo');
+    expect(logo?.getAttribute('src')).toBe('images/logo.svg');
+    expect(logo?.alt).toBe('WomenTrust Graduate Association');
+  });
+
+  it("puts the logo's symbol beside the name in the header", async () => {
+    const compiled = await render('/privacy');
+
+    const brand = compiled.querySelector('header .brand');
+    expect(brand?.textContent?.trim()).toBe('Nkabom');
+    expect(brand?.querySelector('img')?.getAttribute('src')).toBe('icons/mark.svg');
+  });
+
   it('links to the privacy notice from the footer (FR-1.13)', async () => {
     const compiled = await render('/privacy');
 

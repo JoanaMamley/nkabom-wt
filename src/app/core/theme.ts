@@ -6,7 +6,7 @@ export type ThemeMode = 'light' | 'dark';
 export const THEME_STORAGE_KEY = 'nkabom-theme';
 
 // Browser bar colour in each mode: the brand colour in light mode, the page colour in dark mode.
-const THEME_COLORS: Record<ThemeMode, string> = { light: '#e95300', dark: '#16120f' };
+const THEME_COLORS: Record<ThemeMode, string> = { light: '#2d2151', dark: '#15121f' };
 
 function isMode(value: unknown): value is ThemeMode {
   return value === 'light' || value === 'dark';

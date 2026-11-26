@@ -1,7 +1,7 @@
 <div class="auth">
   <div class="card">
     <div class="brand">
-      <!-- Decoration only: shapes in the brand colours. -->
+      <!-- Decoration only: shapes in the logo's colours. -->
       <svg
         class="art"
         viewBox="0 0 600 800"
@@ -11,28 +11,28 @@
       >
         <defs>
           <linearGradient id="auth-circle-light" x1="0" y1="0" x2="1" y2="1">
-            <stop offset="0" stop-color="#ff8c4d" />
-            <stop offset="1" stop-color="#e95300" />
+            <stop offset="0" stop-color="#ef8a5c" />
+            <stop offset="1" stop-color="#d45b26" />
           </linearGradient>
           <linearGradient id="auth-circle-deep" x1="0" y1="0" x2="1" y2="1">
-            <stop offset="0" stop-color="#e95300" />
-            <stop offset="1" stop-color="#8f3300" />
+            <stop offset="0" stop-color="#d45b26" />
+            <stop offset="1" stop-color="#8f3510" />
           </linearGradient>
         </defs>
         <path
           d="M0 0H600V170C520 250 400 190 300 240C200 290 110 190 0 250Z"
-          fill="#e95300"
-          opacity="0.45"
+          fill="#6b5aa8"
+          opacity="0.35"
         />
         <path
           d="M70 310C150 190 360 210 450 300C530 380 600 340 600 340V620C480 560 360 640 240 600C120 560 30 480 70 310Z"
-          fill="#ff8c4d"
-          opacity="0.22"
+          fill="#8b7cc8"
+          opacity="0.2"
         />
         <path
           d="M0 520C120 470 220 560 330 520C440 480 520 430 600 470V800H0Z"
-          fill="#a63b00"
-          opacity="0.55"
+          fill="#2d2151"
+          opacity="0.6"
         />
         <circle cx="210" cy="190" r="62" fill="url(#auth-circle-light)" opacity="0.9" />
         <circle cx="160" cy="610" r="84" fill="url(#auth-circle-deep)" />
@@ -40,6 +40,13 @@
       </svg>
 
       <div class="brand-text">
+        <img
+          class="logo"
+          src="images/logo.svg"
+          alt="WomenTrust Graduate Association"
+          width="320"
+          height="320"
+        />
         <p class="name">Nkabom</p>
         <p class="tagline">{{ tagline() }}</p>
       </div>
