@@ -31,6 +31,7 @@ const PUBLIC_PAGES = [
   '/login',
   '/privacy',
   '/reset-password',
+  '/set-password',
   '/sign-up',
   '/verify-email',
 ];

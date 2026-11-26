@@ -13,12 +13,19 @@ import { HttpError, json, readJson } from './http';
 import { signLink, verifyLink } from './links';
 import { MEMBERS, PASSWORD_RESETS } from './model';
 
-// Password reset (FR-1.4, NKB-203). Like email verification (verification.ts), the Worker sends its
-// own signed link with a template from email-templates.ts (FR-8.5). The signature covers when the
-// password was last set, so the link stops working once it has been used: setting the password
-// changes that time. Nothing needs to be stored to make it one-time.
+// Password reset (FR-1.4, NKB-203) and a new admin's first password (FR-1.8, NKB-208). Like email
+// verification (verification.ts), the Worker sends its own signed link with a template from
+// email-templates.ts (FR-8.5). The signature covers when the password was last set, so the link
+// stops working once it has been used: setting the password changes that time. Nothing needs to be
+// stored to make it one-time. The two kinds of link sign different first parts, so neither works
+// as the other.
+
+/** The two kinds of emailed password link, each the app page it opens. */
+type PasswordLink = 'reset-password' | 'set-password';
 
 export const RESET_LINK_HOURS = 1;
+/** Longer than a reset, since a new admin may not see the email at once. */
+export const SET_PASSWORD_LINK_HOURS = 72;
 /** The shortest password allowed, as on the app's sign-up page. Firebase's own minimum is 6. */
 export const MIN_PASSWORD_LENGTH = 8;
 
@@ -53,9 +60,7 @@ export async function sendPasswordResetEmail(
     return json({ requested: true });
   }
 
-  const expires = String(Math.floor(now / 1000) + RESET_LINK_HOURS * 3600);
-  const sig = await signLink(env, linkParts(account, expires));
-  const link = `${env.APP_URL}/reset-password?${new URLSearchParams({ uid: account.uid, expires, sig })}`;
+  const link = await passwordLink(env, 'reset-password', account, RESET_LINK_HOURS, now);
   try {
     await sendEmail(env, { email: account.email }, 'resetPassword', {
       firstName,
@@ -76,10 +81,39 @@ export async function sendPasswordResetEmail(
  * will not work, and answers with the address it is for. No sign-in; the signature is the
  * permission.
  */
-export async function resetPassword(
+export function resetPassword(request: Request, env: Env, now = Date.now()): Promise<Response> {
+  return usePasswordLink('reset-password', request, env, now);
+}
+
+/**
+ * POST /v1/password/set: the same for the link a new admin is emailed (FR-1.8, admins.ts), which
+ * sets their first password.
+ */
+export function setFirstPassword(request: Request, env: Env, now = Date.now()): Promise<Response> {
+  return usePasswordLink('set-password', request, env, now);
+}
+
+/**
+ * A one-time link to the app page for this kind of link, signed for the account as it is now: it
+ * must already have a password, so a new admin's account is created with a random one.
+ */
+export async function passwordLink(
+  env: Env,
+  kind: PasswordLink,
+  account: AuthAccount,
+  hours: number,
+  now = Date.now(),
+): Promise<string> {
+  const expires = String(Math.floor(now / 1000) + hours * 3600);
+  const sig = await signLink(env, linkParts(kind, account, expires));
+  return `${env.APP_URL}/${kind}?${new URLSearchParams({ uid: account.uid, expires, sig })}`;
+}
+
+async function usePasswordLink(
+  kind: PasswordLink,
   request: Request,
   env: Env,
-  now = Date.now(),
+  now: number,
 ): Promise<Response> {
   const { uid, expires, sig, password } = await readJson(request);
   const invalid = new HttpError(400, 'This link is not valid or has already been used');
@@ -97,7 +131,7 @@ export async function resetPassword(
   if (!account?.email || account.passwordUpdatedAt === null || account.disabled) {
     throw invalid;
   }
-  if (!(await verifyLink(env, linkParts(account, expires), sig))) {
+  if (!(await verifyLink(env, linkParts(kind, account, expires), sig))) {
     throw invalid;
   }
   if (Number(expires) * 1000 <= now) {
@@ -114,14 +148,9 @@ export async function resetPassword(
   return json({ reset: true });
 }
 
-// What the link's signature covers. The address, so a link sent to an address the account no
-// longer has stops working, and when the password was set, so the link works once.
-function linkParts(account: AuthAccount, expires: string): string[] {
-  return [
-    'reset-password',
-    account.uid,
-    account.email ?? '',
-    String(account.passwordUpdatedAt),
-    expires,
-  ];
+// What the link's signature covers. Its kind first, so one kind never works as the other. The
+// address, so a link sent to an address the account no longer has stops working, and when the
+// password was set, so the link works once.
+function linkParts(kind: PasswordLink, account: AuthAccount, expires: string): string[] {
+  return [kind, account.uid, account.email ?? '', String(account.passwordUpdatedAt), expires];
 }

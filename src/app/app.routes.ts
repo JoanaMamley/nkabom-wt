@@ -1,5 +1,6 @@
 import { Routes } from '@angular/router';
 
+import { AddAdminPage } from './admins/add-admin-page';
 import { Access, defaultDeny } from './core/guards';
 import { HomePage } from './home/home-page';
 import { LoginPage } from './login/login-page';
@@ -21,7 +22,8 @@ export const routes: Routes = [
     // Default deny (FR-1.12, NKB-206): every page goes here, and is for logged-in members unless
     // its data opens it with open(). Only login, sign-up and the privacy notice are open, with the
     // two steps that confirm a sign-up's email address (FR-1.2), which the emailed link may open on
-    // another device, and the two that reset a forgotten password (FR-1.4).
+    // another device, the two that reset a forgotten password (FR-1.4), and the one where a new
+    // admin sets their first password (FR-1.8).
     path: '',
     canActivateChild: [defaultDeny],
     children: [
@@ -62,8 +64,17 @@ export const routes: Routes = [
         data: open('public'),
         title: 'Reset password · Nkabom',
       },
+      // A new admin's first password (FR-1.8), from the link they are emailed.
+      {
+        path: 'set-password',
+        component: ResetPasswordPage,
+        data: { ...open('public'), firstPassword: true },
+        title: 'Set your password · Nkabom',
+      },
       // Logged in.
       { path: 'home', component: HomePage, title: 'Nkabom' },
+      // A Primary Admin adds an admin (FR-1.6). The Worker refuses anyone else.
+      { path: 'admins', component: AddAdminPage, title: 'Add an admin · Nkabom' },
     ],
   },
   // A mistyped or old address goes to login, which sends anyone logged in on to their home page.

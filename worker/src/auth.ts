@@ -27,6 +27,11 @@ export interface User {
   authTime: number;
   /** The role custom claim on the token (NKB-204), or null if it has none. */
   roleClaim: string | null;
+  /**
+   * How the user signed in, as Firebase names it: 'password' for email and password, 'google.com'
+   * and so on for social logins (the token's firebase.sign_in_provider), or null if it is missing.
+   */
+  signInProvider: string | null;
 }
 
 // Checks the Firebase ID token. Endpoints call it through requireAccount (users.ts).
@@ -75,7 +80,17 @@ export async function verifyIdToken(
     emailVerified: payload['email_verified'] === true,
     authTime: payload['auth_time'] as number,
     roleClaim: typeof payload['role'] === 'string' ? payload['role'] : null,
+    signInProvider: signInProvider(payload),
   };
+}
+
+function signInProvider(payload: JWTPayload): string | null {
+  const firebase = payload['firebase'];
+  const provider =
+    firebase && typeof firebase === 'object'
+      ? (firebase as Record<string, unknown>)['sign_in_provider']
+      : undefined;
+  return typeof provider === 'string' ? provider : null;
 }
 
 async function requireEmulatorUser(host: string, projectId: string, uid: string): Promise<void> {

@@ -1,0 +1,113 @@
+<section class="page">
+  @switch (state()) {
+    @case ('checking') {
+      <h1>Add an admin</h1>
+      <p>Loading…</p>
+    }
+    @case ('denied') {
+      <h1>Add an admin</h1>
+      <p>Only a Primary Admin can add admins.</p>
+      <p><a routerLink="/home">Back to home</a></p>
+    }
+    @case ('error') {
+      <h1>Add an admin</h1>
+      <p>{{ checkError() }}</p>
+    }
+    @case ('ready') {
+      @if (added(); as admin) {
+        <h1 #addedHeading tabindex="-1">Admin added</h1>
+        <p class="status" role="status">
+          <strong>{{ admin.name }}</strong> is now an admin. We've emailed
+          <strong>{{ admin.email }}</strong> a link to set their password. It works once, for 72
+          hours.
+        </p>
+        <p>
+          If it expires, they can use <strong>Forgot password?</strong> on the login page with the
+          same address.
+        </p>
+        <div class="actions">
+          <button type="button" class="primary" (click)="addAnother()">Add another admin</button>
+          <a routerLink="/home" class="button">Back to home</a>
+        </div>
+      } @else {
+        <h1>Add an admin</h1>
+        <p>
+          They will be emailed a link to set their password, and log in with their email address and
+          password.
+        </p>
+
+        <form [formGroup]="form" (ngSubmit)="submit()" novalidate>
+          <div class="field">
+            <input
+              #nameInput
+              id="name"
+              type="text"
+              formControlName="name"
+              autocomplete="off"
+              placeholder=" "
+              [attr.maxlength]="maxNameLength"
+              [attr.aria-invalid]="invalid('name')"
+              [attr.aria-describedby]="invalid('name') ? 'name-error' : null"
+            />
+            <label for="name">Name</label>
+            @if (invalid('name')) {
+              <p id="name-error" class="field-error">Enter their name.</p>
+            }
+          </div>
+
+          <div class="field">
+            <input
+              id="email"
+              type="email"
+              formControlName="email"
+              autocomplete="off"
+              placeholder=" "
+              [attr.aria-invalid]="invalid('email')"
+              aria-describedby="email-hint"
+            />
+            <label for="email">Login email</label>
+            <p id="email-hint" class="hint" [class.field-error]="invalid('email')">
+              @if (invalid('email')) {
+                Enter a valid email address.
+              } @else {
+                The address they will log in with. It cannot already have a Nkabom account.
+              }
+            </p>
+          </div>
+
+          <div class="field">
+            <input
+              id="calendar-email"
+              type="email"
+              formControlName="calendarEmail"
+              autocomplete="off"
+              placeholder=" "
+              [attr.aria-invalid]="invalid('calendarEmail')"
+              aria-describedby="calendar-email-hint"
+            />
+            <label for="calendar-email">Calendar email (optional)</label>
+            <p id="calendar-email-hint" class="hint" [class.field-error]="invalid('calendarEmail')">
+              @if (invalid('calendarEmail')) {
+                Enter a valid email address, or leave it empty.
+              } @else {
+                The Google account to share the birthday calendar with. Leave it empty to use the
+                login email.
+              }
+            </p>
+          </div>
+
+          @if (error(); as message) {
+            <p class="form-error" role="alert">{{ message }}</p>
+          }
+
+          <div class="actions">
+            <button type="submit" class="primary" [disabled]="busy()">
+              {{ busy() ? 'Adding…' : 'Add admin' }}
+            </button>
+            <a routerLink="/home" class="button">Cancel</a>
+          </div>
+        </form>
+      }
+    }
+  }
+</section>

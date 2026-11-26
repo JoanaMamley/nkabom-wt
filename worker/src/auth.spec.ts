@@ -46,6 +46,25 @@ describe('verifyIdToken', () => {
       emailVerified: true,
       authTime: claims().auth_time,
       roleClaim: null,
+      signInProvider: 'password',
+    });
+  });
+
+  it('reads how the user signed in, or null when the token does not say (FR-1.9)', async () => {
+    const social = await signToken(google.privateKey, 'google-1', {
+      ...claims(),
+      firebase: { sign_in_provider: 'google.com' },
+    });
+    await expect(verifyIdToken(social, stagingEnv(), keys)).resolves.toMatchObject({
+      signInProvider: 'google.com',
+    });
+
+    const bare = await signToken(google.privateKey, 'google-1', {
+      ...claims(),
+      firebase: undefined,
+    });
+    await expect(verifyIdToken(bare, stagingEnv(), keys)).resolves.toMatchObject({
+      signInProvider: null,
     });
   });
 

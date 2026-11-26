@@ -25,17 +25,37 @@ export interface AuthAccount {
 
 /** The account with this user ID, or null if there is none. */
 export async function lookupAccount(env: Env, uid: string): Promise<AuthAccount | null> {
-  return firstAccount(await post(env, 'lookup', { localId: [uid] }));
+  return firstAccount(await post(env, ':lookup', { localId: [uid] }));
 }
 
 /** The account with this email address (in any case), or null if there is none. */
 export async function lookupAccountByEmail(env: Env, email: string): Promise<AuthAccount | null> {
-  return firstAccount(await post(env, 'lookup', { email: [email] }));
+  return firstAccount(await post(env, ':lookup', { email: [email] }));
+}
+
+/**
+ * Creates an email and password account with its address marked verified, as the Worker and the
+ * rules require (NKB-202), and returns its user ID. For admins (NKB-208), who set their own
+ * password through an emailed link.
+ */
+export async function createAccount(
+  env: Env,
+  account: { email: string; displayName: string; password: string },
+): Promise<string> {
+  const { localId } = (await post(env, '', { ...account, emailVerified: true })) as {
+    localId: string;
+  };
+  return localId;
+}
+
+/** Deletes the account, as when creating an admin fails part-way. */
+export async function deleteAccount(env: Env, uid: string): Promise<void> {
+  await post(env, ':delete', { localId: uid });
 }
 
 /** Marks the account's email address as verified (FR-1.2). */
 export async function markEmailVerified(env: Env, uid: string): Promise<void> {
-  await post(env, 'update', { localId: uid, emailVerified: true });
+  await post(env, ':update', { localId: uid, emailVerified: true });
 }
 
 /**
@@ -43,7 +63,7 @@ export async function markEmailVerified(env: Env, uid: string): Promise<void> {
  * marked verified too, since only its owner could open the emailed link that leads here.
  */
 export async function setPassword(env: Env, uid: string, password: string): Promise<void> {
-  await post(env, 'update', { localId: uid, password, emailVerified: true });
+  await post(env, ':update', { localId: uid, password, emailVerified: true });
 }
 
 /**
@@ -54,7 +74,7 @@ export async function setPassword(env: Env, uid: string, password: string): Prom
  */
 export async function setRoleClaim(env: Env, uid: string, role: Role): Promise<void> {
   const claims = (await lookupAccount(env, uid))?.claims ?? {};
-  await post(env, 'update', {
+  await post(env, ':update', {
     localId: uid,
     customAttributes: JSON.stringify({ ...claims, role }),
   });
@@ -94,14 +114,17 @@ function firstAccount(response: unknown): AuthAccount | null {
     : null;
 }
 
+// method: ':lookup', ':update' and so on, or '' to create an account.
 async function post(env: Env, method: string, body: unknown): Promise<unknown> {
-  const response = await fetch(`${authUrl(env)}/accounts:${method}`, {
+  const response = await fetch(`${authUrl(env)}/accounts${method}`, {
     method: 'POST',
     headers: { ...(await authHeaders(env)), 'Content-Type': 'application/json' },
     body: JSON.stringify(body),
   });
   if (!response.ok) {
-    throw new Error(`Firebase Auth ${method} failed: ${response.status} ${await response.text()}`);
+    throw new Error(
+      `Firebase Auth ${method.slice(1) || 'create'} failed: ${response.status} ${await response.text()}`,
+    );
   }
   return response.json();
 }

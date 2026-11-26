@@ -12,6 +12,7 @@ function accountWith(role: string): Account {
     emailVerified: true,
     authTime: 1_790_000_000,
     roleClaim: null,
+    signInProvider: 'password',
     role,
     session: { idleSeconds: 1800, expiresAt: null },
   };

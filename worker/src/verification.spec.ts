@@ -16,6 +16,7 @@ const AMA: User = {
   emailVerified: false,
   authTime: 1_790_000_000,
   roleClaim: null,
+  signInProvider: 'password',
 };
 
 interface FakeAccount {
