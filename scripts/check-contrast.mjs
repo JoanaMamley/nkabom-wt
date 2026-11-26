@@ -32,16 +32,21 @@ function contrast(a, b) {
   return (light + 0.05) / (dark + 0.05);
 }
 
-const TEXT = ['text', 'text-muted', 'link', 'error', 'success', 'warning'];
+const TEXT = ['text', 'text-muted', 'link', 'accent', 'error', 'success', 'warning'];
 const BACKGROUNDS = ['bg', 'surface'];
 
 // [foreground, background, minimum ratio]
 const pairs = [
   ...TEXT.flatMap((fg) => BACKGROUNDS.map((bg) => [fg, bg, 4.5])),
   ['on-primary', 'primary', 4.5],
-  // White text on both ends of the brand gradient (login art and main buttons).
+  // White text on both ends of the brand gradient (login art) and the main buttons' gradient.
   ['on-brand', 'brand-from', 4.5],
   ['on-brand', 'brand-to', 4.5],
+  ['on-brand', 'button-from', 4.5],
+  ['on-brand', 'button-to', 4.5],
+  // Main buttons have no border, so both ends of their gradient must stand out from the page.
+  ['button-from', 'bg', 3],
+  ['button-to', 'bg', 3],
   // The update bar uses the page colours swapped.
   ['bg', 'text', 4.5],
   ...['border', 'primary', 'focus'].flatMap((fg) => BACKGROUNDS.map((bg) => [fg, bg, 3])),

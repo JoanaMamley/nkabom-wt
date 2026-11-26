@@ -58,7 +58,7 @@ describe('Theme', () => {
     TestBed.tick();
 
     expect(theme.mode()).toBe('dark');
-    expect(meta.content).toBe('#16120f');
+    expect(meta.content).toBe('#15121f');
   });
 
   it('switches mode, marks the page and remembers the choice', () => {
@@ -71,14 +71,14 @@ describe('Theme', () => {
     expect(theme.mode()).toBe('dark');
     expect(document.documentElement.dataset['theme']).toBe('dark');
     expect(localStorage.getItem(THEME_STORAGE_KEY)).toBe('dark');
-    expect(meta.content).toBe('#16120f');
+    expect(meta.content).toBe('#15121f');
 
     theme.toggle();
     TestBed.tick();
 
     expect(theme.mode()).toBe('light');
     expect(document.documentElement.dataset['theme']).toBe('light');
-    expect(meta.content).toBe('#e95300');
+    expect(meta.content).toBe('#2d2151');
   });
 
   it('uses a saved choice over the device setting, as after a reload', () => {

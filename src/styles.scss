@@ -1,8 +1,11 @@
 // Light and dark theme (NKB-108, FR-8.8 to FR-8.10). Pages use these custom properties, never raw
-// colours, so both modes stay readable. The brand colour is #e95300 (--color-primary). White text
-// on it is too faint for normal-size text (3.68:1), so buttons put dark text on it, and links in
-// light mode use the deeper #b84200. npm run check:contrast checks every text colour against
-// both backgrounds (WCAG AA: 4.5:1 for text, 3:1 for borders and controls); CI runs it too.
+// colours, so both modes stay readable. The colours come from the WomenTrust Graduate Association
+// logo (public/images/logo.svg): indigo #2d2151 and orange #d45b26. Indigo carries links, focus and
+// the brand gradient, with white on it. The orange is too light for small text on white (3.94:1),
+// so it marks controls and borders (--color-primary), and coloured words use the deeper #b2461a
+// (--color-accent); in dark mode they use lighter tints of both. npm run check:contrast checks every
+// text colour against both backgrounds (WCAG AA: 4.5:1 for text, 3:1 for borders and controls); CI
+// runs it too.
 //
 // With no saved choice the device setting decides (prefers-color-scheme). A saved choice sets
 // data-theme on <html>: the inline script in index.html applies it before first paint, and the
@@ -10,39 +13,52 @@
 
 @mixin light-colors {
   --color-bg: #ffffff;
-  --color-surface: #fbf6f2;
-  --color-text: #1f1a17;
-  --color-text-muted: #5e554f;
-  --color-border: #8f847c;
-  --color-primary: #e95300;
-  --color-on-primary: #1f1a17;
-  --color-link: #b84200;
-  --color-focus: #b84200;
+  --color-surface: #f7f5fa;
+  --color-text: #1d1730;
+  --color-text-muted: #5c566b;
+  --color-border: #8a8299;
+  --color-primary: #d45b26;
+  --color-on-primary: #120d20;
+  --color-link: #2d2151;
+  --color-accent: #b2461a;
+  --color-focus: #2d2151;
   --color-error: #b3261e;
   --color-success: #1e6b3a;
   --color-warning: #8a5a00;
-  // The brand gradient behind the login and sign-up art and on main buttons, with white on it.
-  --color-brand-from: #c44700;
-  --color-brand-to: #6b2600;
+  // The brand gradient behind the login and sign-up art, with white on it.
+  --color-brand-from: #463780;
+  --color-brand-to: #1c1436;
   --color-on-brand: #ffffff;
+  // Main buttons, with white on them. Both ends must stand out from the page, as they have no
+  // border: in light mode the brand gradient does.
+  --color-button-from: #463780;
+  --color-button-to: #1c1436;
+  // Behind the logo, which is drawn for white.
+  --color-logo-backdrop: #ffffff;
 }
 
 @mixin dark-colors {
-  --color-bg: #16120f;
-  --color-surface: #231c18;
-  --color-text: #f1e9e4;
-  --color-text-muted: #b8ada6;
-  --color-border: #81756d;
-  --color-primary: #e95300;
-  --color-on-primary: #1f1a17;
-  --color-link: #ff8c4d;
-  --color-focus: #ff8c4d;
+  --color-bg: #15121f;
+  --color-surface: #211c33;
+  --color-text: #eeebf5;
+  --color-text-muted: #b4adc4;
+  --color-border: #7e7794;
+  --color-primary: #d45b26;
+  --color-on-primary: #120d20;
+  --color-link: #b9aee6;
+  --color-accent: #ef8a5c;
+  --color-focus: #b9aee6;
   --color-error: #ffb4ab;
   --color-success: #7dd89b;
   --color-warning: #f0c060;
-  --color-brand-from: #c44700;
-  --color-brand-to: #6b2600;
+  --color-brand-from: #463780;
+  --color-brand-to: #1c1436;
   --color-on-brand: #ffffff;
+  // Lighter than the brand gradient, which would vanish into the dark page.
+  --color-button-from: #7464c2;
+  --color-button-to: #6655b0;
+  // Behind the logo, which is drawn for white.
+  --color-logo-backdrop: #ffffff;
 }
 
 :root {
@@ -203,7 +219,7 @@ button.primary,
 .button.primary {
   width: 100%;
   border: 0;
-  background: linear-gradient(90deg, var(--color-brand-from), var(--color-brand-to));
+  background: linear-gradient(90deg, var(--color-button-from), var(--color-button-to));
   color: var(--color-on-brand);
   font-weight: 600;
   letter-spacing: 0.2em;
@@ -245,7 +261,7 @@ app-auth-layout {
     }
 
     .time {
-      color: var(--color-link);
+      color: var(--color-accent);
       font-weight: 600;
     }
   }
@@ -258,7 +274,7 @@ app-auth-layout {
   }
 
   .accent {
-    color: var(--color-link);
+    color: var(--color-accent);
   }
 
   .switch {
