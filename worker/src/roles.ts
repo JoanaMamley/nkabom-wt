@@ -14,3 +14,10 @@ export function requireAdmin(account: Account): void {
     throw new HttpError(403, 'Only admins can do this');
   }
 }
+
+// Managing admin accounts needs a Primary Admin (FR-1.5, FR-1.6).
+export function requirePrimaryAdmin(account: Account): void {
+  if (account.role !== 'primaryAdmin') {
+    throw new HttpError(403, 'Only a Primary Admin can do this');
+  }
+}

@@ -52,7 +52,13 @@ const SIGNED_IN = Math.floor(Date.now() / 1000) - 60;
 // A signed-in user whose email address is verified, as every account must be (NKB-202).
 function as(uid: string, claims: Record<string, unknown> = {}) {
   return env
-    .authenticatedContext(uid, { email_verified: true, auth_time: SIGNED_IN, ...claims })
+    .authenticatedContext(uid, {
+      email_verified: true,
+      auth_time: SIGNED_IN,
+      // An email and password sign-in, as admins must use (FR-1.9).
+      firebase: { sign_in_provider: 'password' },
+      ...claims,
+    })
     .firestore();
 }
 
@@ -268,6 +274,18 @@ describe('role-based access', () => {
       .authenticatedContext('efua', { email_verified: false, role: 'admin' })
       .firestore();
     await assertFails(getDoc(doc(unverified, MEMBERS, 'ama')));
+  });
+
+  it('denies an admin who signed in any way but email and password (FR-1.9)', async () => {
+    for (const provider of ['google.com', 'facebook.com', 'custom']) {
+      const db = as('efua', { role: 'admin', firebase: { sign_in_provider: provider } });
+      await assertFails(getDoc(doc(db, MEMBERS, 'ama')));
+      await assertFails(getDocs(collection(db, USERS)));
+    }
+    // A member may sign in another way, and keeps their own reads.
+    const member = as('ama', { firebase: { sign_in_provider: 'google.com' } });
+    await assertSucceeds(getDoc(doc(member, USERS, 'ama')));
+    await assertSucceeds(getDoc(doc(member, MEMBERS, 'ama')));
   });
 
   describe('admin session expiry (FR-1.10)', () => {

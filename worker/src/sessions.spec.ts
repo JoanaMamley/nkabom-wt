@@ -23,6 +23,7 @@ function user(authTime = SIGNED_IN): User {
     emailVerified: true,
     authTime,
     roleClaim: null,
+    signInProvider: 'password',
   };
 }
 

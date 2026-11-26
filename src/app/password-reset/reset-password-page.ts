@@ -17,9 +17,11 @@ import { RevealPassword } from '../reveal-password/reveal-password';
 type State = 'checking' | 'ready' | 'done' | 'expired' | 'invalid' | 'error';
 
 /**
- * Where the emailed reset link lands (FR-1.4, NKB-203). The Worker checks the link first, so a used
- * or expired one says so before anything is typed, then sets the new password. Public like the
- * other emailed link (FR-1.12): whoever opens it is logged out.
+ * Where the emailed reset link lands (FR-1.4, NKB-203), and at /set-password the link a new admin
+ * is emailed to set their first password (FR-1.8, NKB-208), which route data firstPassword marks.
+ * The Worker checks the link first, so a used or expired one says so before anything is typed,
+ * then sets the password. Public like the other emailed link (FR-1.12): whoever opens it is logged
+ * out.
  */
 @Component({
   selector: 'app-reset-password-page',
@@ -31,6 +33,12 @@ export class ResetPasswordPage implements OnInit {
   private readonly api = inject(Api);
   private readonly route = inject(ActivatedRoute);
   private readonly pendingTasks = inject(PendingTasks);
+
+  /** A new admin's first password, rather than a reset. */
+  protected readonly firstPassword = this.route.snapshot.data['firstPassword'] === true;
+  /** How long the link works, as the Worker sets it (password-reset.ts). */
+  protected readonly linkHours = this.firstPassword ? 72 : 1;
+  private readonly endpoint = this.firstPassword ? '/v1/password/set' : '/v1/password/reset';
 
   protected readonly minPasswordLength = MIN_PASSWORD_LENGTH;
   protected readonly form = inject(NonNullableFormBuilder).group(
@@ -59,7 +67,7 @@ export class ResetPasswordPage implements OnInit {
 
   private async check(): Promise<void> {
     try {
-      const { email } = await this.api.post<{ email: string }>('/v1/password/reset', this.link);
+      const { email } = await this.api.post<{ email: string }>(this.endpoint, this.link);
       this.email.set(email);
       this.state.set('ready');
     } catch (error) {
@@ -77,7 +85,7 @@ export class ResetPasswordPage implements OnInit {
 
     try {
       const { password } = this.form.getRawValue();
-      await this.api.post('/v1/password/reset', { ...this.link, password });
+      await this.api.post(this.endpoint, { ...this.link, password });
     } catch (error) {
       if (error instanceof ApiError && error.status === 410) {
         this.state.set('expired');

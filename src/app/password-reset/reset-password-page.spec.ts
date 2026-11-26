@@ -11,6 +11,8 @@ describe('ResetPasswordPage', () => {
   const LINK = { uid: 'ama', expires: '1793440800', sig: 'signature' };
   const api = { post: vi.fn() };
   let signedInAs: { uid: string } | null;
+  // The route's data: firstPassword at /set-password.
+  let routeData: Record<string, unknown>;
   const accounts = { signOut: vi.fn(), currentUser: vi.fn(async () => signedInAs) };
 
   beforeEach(() => {
@@ -18,6 +20,7 @@ describe('ResetPasswordPage', () => {
     accounts.signOut.mockReset().mockResolvedValue(undefined);
     // This device is signed in as the account being reset.
     signedInAs = { uid: LINK.uid };
+    routeData = {};
     TestBed.configureTestingModule({
       imports: [ResetPasswordPage],
       providers: [
@@ -27,7 +30,9 @@ describe('ResetPasswordPage', () => {
         { provide: Accounts, useValue: accounts },
         {
           provide: ActivatedRoute,
-          useValue: { snapshot: { queryParamMap: convertToParamMap(LINK) } },
+          useFactory: () => ({
+            snapshot: { queryParamMap: convertToParamMap(LINK), data: routeData },
+          }),
         },
       ],
     });
@@ -155,5 +160,42 @@ describe('ResetPasswordPage', () => {
     const { page } = await render();
 
     expect(page.querySelector('h1')?.textContent).toContain('could not be checked');
+  });
+
+  describe('at /set-password, for a new admin (FR-1.8)', () => {
+    beforeEach(() => {
+      routeData = { firstPassword: true };
+    });
+
+    it('checks the link with the Worker’s set-password endpoint', async () => {
+      const { page } = await render();
+
+      expect(api.post).toHaveBeenCalledWith('/v1/password/set', LINK);
+      expect(page.querySelector('h1')?.textContent).toContain('Choose your password');
+      expect(page.querySelector('label[for="password"]')?.textContent?.trim()).toBe('Password');
+    });
+
+    it('sets their first password and offers to log in', async () => {
+      const { page, choose } = await render();
+      api.post.mockResolvedValue({ reset: true });
+
+      await choose('correct horse');
+
+      expect(api.post).toHaveBeenLastCalledWith('/v1/password/set', {
+        ...LINK,
+        password: 'correct horse',
+      });
+      expect(page.querySelector('h1')?.textContent).toContain('Password set');
+      expect(page.querySelector('a.button')?.getAttribute('href')).toBe('/login');
+    });
+
+    it('says the link lasts 72 hours, and how to get a new one, once expired', async () => {
+      api.post.mockRejectedValue(new ApiError(410, 'This link has expired'));
+      const { page } = await render();
+
+      expect(page.querySelector('h1')?.textContent).toContain('This link has expired');
+      expect(page.textContent).toContain('Links work for 72 hours');
+      expect(page.querySelector('a.button')?.getAttribute('href')).toBe('/forgot-password');
+    });
   });
 });

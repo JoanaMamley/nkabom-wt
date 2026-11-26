@@ -20,9 +20,13 @@ service cloud.firestore {
     // deactivated there loses admin reads at once, without waiting for its token to expire.
     // A token with no claim is a member's. The claim is checked first, so members cost no lookup;
     // an admin's costs one read of their own record, and an account with no record is denied.
+    //
+    // Admins log in with email and password only (FR-1.9, NKB-208), so an admin signed in another
+    // way, such as with Google once members can (NKB-210), gets no admin reads.
     function isAdmin() {
       return isVerified()
         && request.auth.token.get('role', 'member') in ['admin', 'primaryAdmin']
+        && request.auth.token.firebase.sign_in_provider == 'password'
         && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role
           in ['admin', 'primaryAdmin']
         && adminSessionActive();

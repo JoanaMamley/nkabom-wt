@@ -1,10 +1,11 @@
+import { createAdmin } from './admins';
 import { preflight, withCors } from './cors';
 import type { Env } from './env';
 import { sendEmail } from './email';
 import { HttpError, json } from './http';
 import { type JobMessage, queueScheduledTasks, runJobMessages } from './jobs';
 import { editProfile, register } from './members';
-import { resetPassword, sendPasswordResetEmail } from './password-reset';
+import { resetPassword, sendPasswordResetEmail, setFirstPassword } from './password-reset';
 import { getPhotoDownloadUrl, getPhotoUploadUrl, servePhoto } from './photos';
 import { requireAdmin } from './roles';
 import { requireUser } from './auth';
@@ -74,6 +75,14 @@ async function route(request: Request, env: Env): Promise<Response> {
       // From the emailed link, which is the permission; no sign-in.
       allow(request, 'POST');
       return resetPassword(request, env);
+    case '/v1/password/set':
+      // From the link a new admin is emailed (admins.ts), which is the permission; no sign-in.
+      allow(request, 'POST');
+      return setFirstPassword(request, env);
+    case '/v1/admins':
+      // FR-1.6: a Primary Admin creates an admin account.
+      allow(request, 'POST');
+      return createAdmin(request, env, await requireAccount(request, env));
     case '/v1/registration':
       allow(request, 'POST');
       return register(request, env, await requireAccount(request, env));

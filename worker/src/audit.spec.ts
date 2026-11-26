@@ -12,6 +12,7 @@ const admin: Account = {
   emailVerified: true,
   authTime: 1_790_000_000,
   roleClaim: null,
+  signInProvider: 'password',
   session: { idleSeconds: 1800, expiresAt: null },
   role: 'admin',
 };

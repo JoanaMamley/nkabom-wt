@@ -3,6 +3,7 @@ import type { Env } from './env';
 import { commit, FirestoreError, getDocument, SERVER_TIME, WriteBatch } from './firestore';
 import { setRoleClaim } from './firebase-auth';
 import { HttpError } from './http';
+import { ADMIN_ROLES } from './roles';
 import { ROLES, USERS, type Role } from './model';
 import { type SessionInfo, touchSession } from './sessions';
 
@@ -28,6 +29,11 @@ export async function requireAccount(request: Request, env: Env): Promise<Accoun
     throw new HttpError(403, 'Verify your email address first');
   }
   const role = await userRole(env, user);
+  // FR-1.9: admins log in with email and password only, so an admin signed in another way, such
+  // as with Google once members can (NKB-210), gets nothing. The rules check the same.
+  if (ADMIN_ROLES.includes(role) && user.signInProvider !== 'password') {
+    throw new HttpError(403, 'Admins log in with email and password');
+  }
   const session = await touchSession(env, user, role);
   await syncRoleClaim(env, user, role);
   return { ...user, role, session };

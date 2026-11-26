@@ -48,6 +48,8 @@ export function claims(projectId = PROJECT_ID, uid = 'ama') {
     auth_time: now,
     email: 'ama@example.com',
     email_verified: true,
+    // An email and password sign-in, as admins must use (FR-1.9).
+    firebase: { sign_in_provider: 'password', identities: {} },
   };
 }
 
