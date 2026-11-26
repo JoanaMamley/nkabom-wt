@@ -3,8 +3,12 @@ import {
   browserLocalPersistence,
   browserSessionPersistence,
   createUserWithEmailAndPassword,
+  getRedirectResult,
+  GoogleAuthProvider,
   setPersistence,
   signInWithEmailAndPassword,
+  signInWithPopup,
+  signInWithRedirect,
   signOut,
   type User,
 } from 'firebase/auth';
@@ -36,9 +40,51 @@ export class Accounts {
     return (await signInWithEmailAndPassword(this.auth, email, password)).user;
   }
 
+  /**
+   * Logs in with Google (FR-1.1, NKB-210), creating the account on a first login. Google accounts
+   * have verified addresses, so no verification email is needed. Uses a pop-up, except in an
+   * app installed on an iPhone's Home Screen, where the pop-up cannot hand the sign-in back: there
+   * the page goes to Google and comes back, and this resolves to null as it leaves. The page it
+   * comes back to finishes with googleRedirectResult(). remember is as for logIn; leaving it out
+   * keeps the sign-in after the browser closes, as sign-up does.
+   */
+  async logInWithGoogle(remember = true): Promise<User | null> {
+    await setPersistence(this.auth, remember ? browserLocalPersistence : browserSessionPersistence);
+    const provider = new GoogleAuthProvider();
+    // On a shared device, let each member pick their own Google account.
+    provider.setCustomParameters({ prompt: 'select_account' });
+    if (installedOnIPhone()) {
+      sessionStorage.setItem(GOOGLE_REDIRECT_KEY, '1');
+      await signInWithRedirect(this.auth, provider);
+      return null;
+    }
+    return (await signInWithPopup(this.auth, provider)).user;
+  }
+
+  /**
+   * The user from a Google login that went to Google and came back (logInWithGoogle), or null if
+   * this page load is not one. Checks for one only when this tab started it, since asking Firebase
+   * otherwise costs a network round trip on every visit to the page.
+   */
+  async googleRedirectResult(): Promise<User | null> {
+    if (!sessionStorage.getItem(GOOGLE_REDIRECT_KEY)) {
+      return null;
+    }
+    sessionStorage.removeItem(GOOGLE_REDIRECT_KEY);
+    return (await getRedirectResult(this.auth))?.user ?? null;
+  }
+
   signOut(): Promise<void> {
     return signOut(this.auth);
   }
+}
+
+/** Set in sessionStorage while a Google login has gone to Google and not yet come back. */
+const GOOGLE_REDIRECT_KEY = 'nkabom.googleRedirect';
+
+/** Whether the app runs from an iPhone's (or iPad's) Home Screen, which only Safari reports. */
+export function installedOnIPhone(): boolean {
+  return (navigator as Navigator & { standalone?: boolean }).standalone === true;
 }
 
 /**

@@ -1,4 +1,4 @@
-import { signal } from '@angular/core';
+import { ApplicationRef, signal } from '@angular/core';
 import { TestBed } from '@angular/core/testing';
 import { provideRouter, Router } from '@angular/router';
 
@@ -18,7 +18,12 @@ describe('greeting', () => {
 });
 
 describe('LoginPage', () => {
-  const accounts = { logIn: vi.fn(), signOut: vi.fn() };
+  const accounts = {
+    logIn: vi.fn(),
+    signOut: vi.fn(),
+    logInWithGoogle: vi.fn(),
+    googleRedirectResult: vi.fn(),
+  };
   const session = { start: vi.fn(), expiredMessage: signal<string | null>(null) };
   const verification = { sendError: signal<string | null>(null) };
   let navigate: ReturnType<typeof vi.spyOn>;
@@ -26,6 +31,7 @@ describe('LoginPage', () => {
   beforeEach(() => {
     accounts.logIn.mockReset().mockResolvedValue({ emailVerified: true });
     accounts.signOut.mockReset().mockResolvedValue(undefined);
+    accounts.googleRedirectResult.mockReset().mockResolvedValue(null);
     session.start.mockReset().mockResolvedValue({ uid: 'ama', role: 'member' });
     session.expiredMessage.set(null);
     TestBed.configureTestingModule({
@@ -166,5 +172,20 @@ describe('LoginPage', () => {
     expect(page.querySelector('a[href="/forgot-password"]')?.textContent).toContain(
       'Forgot password?',
     );
+  });
+
+  it('offers Google login, remembering the sign-in only when asked (NKB-210)', async () => {
+    accounts.logInWithGoogle.mockResolvedValue(null);
+    const { page } = await render();
+    const google = () => page.querySelector<HTMLButtonElement>('app-google-sign-in button')!;
+
+    google().click();
+    await TestBed.inject(ApplicationRef).whenStable();
+    page.querySelector<HTMLInputElement>('input[type="checkbox"]')!.click();
+    await TestBed.inject(ApplicationRef).whenStable();
+    google().click();
+    await TestBed.inject(ApplicationRef).whenStable();
+
+    expect(accounts.logInWithGoogle.mock.calls).toEqual([[false], [true]]);
   });
 });
