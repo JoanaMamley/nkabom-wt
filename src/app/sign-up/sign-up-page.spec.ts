@@ -5,10 +5,11 @@ import { provideRouter, Router } from '@angular/router';
 import { Accounts } from '../core/accounts';
 import { Theme } from '../core/theme';
 import { SignUpPage } from './sign-up-page';
+import { Session } from '../core/session';
 import { Verification } from './verification';
 
 describe('SignUpPage', () => {
-  const accounts = { signUp: vi.fn() };
+  const accounts = { signUp: vi.fn(), googleRedirectResult: async () => null };
   const verification = { send: vi.fn() };
 
   beforeEach(() => {
@@ -21,8 +22,17 @@ describe('SignUpPage', () => {
         { provide: Theme, useValue: { mode: signal('light'), toggle: vi.fn() } },
         { provide: Accounts, useValue: accounts },
         { provide: Verification, useValue: verification },
+        { provide: Session, useValue: { start: vi.fn() } },
       ],
     });
+  });
+
+  it('offers Google sign-up beside the form (NKB-210)', async () => {
+    const { page } = await render();
+
+    expect(page.querySelector('app-google-sign-in button')?.textContent).toContain(
+      'Continue with Google',
+    );
   });
 
   async function render() {

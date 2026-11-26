@@ -107,7 +107,7 @@ Add the Cloudflare password, 2-step method and recovery codes to the private acc
 
 The app's email is sent from the shared account's Gmail address, through Gmail's mail server with an app password, so no domain or email service is needed. Nothing to set up now beyond 2-Step Verification, which section 1 turned on: app passwords only exist on accounts that have it. The app password itself is made in NKB-116 at [myaccount.google.com/apppasswords](https://myaccount.google.com/apppasswords) and set straight away as a Worker secret, so it is never kept anywhere else.
 
-If you already turned on the Gmail API or started the Google Auth Platform sign-in screen in `nkabom-prod`, leave them as they are. The Gmail API is not used but costs nothing, and the sign-in screen is needed for Google login, which publishes it in NKB-210.
+If you already turned on the Gmail API or started the Google Auth Platform sign-in screen in `nkabom-prod`, leave them as they are. The Gmail API is not used but costs nothing, and the sign-in screen is needed for Google login, which publishes it in NKB-210 ([Setting up Google login](../../README.md#setting-up-google-login) in the README).
 
 ## 5. Tools
 
@@ -123,6 +123,7 @@ That completes NKB-113. The rest of the set-up comes with the stories that need 
 - **NKB-116:** follow [Setting up Gmail](../../README.md#setting-up-gmail) in the README: make an app password for each environment and set it, with the account's address, as Worker secrets.
 - **NKB-118:** create the job queues ([Setting up the queues](../../README.md#setting-up-the-queues) in the README), then check the scheduled triggers run on staging.
 - **NKB-119:** test a backup restore, then record it in the README.
+- **NKB-210:** follow [Setting up Google login](../../README.md#setting-up-google-login) in the README: turn on Google sign-in, publish the Google Auth Platform sign-in screen, and set `authDomain` and the redirect address for each project.
 - **NKB-121:** follow [Setting up deploys](../../README.md#setting-up-deploys) in the README: run the Workload Identity Federation script in Cloud Shell for each project, make the Cloudflare API token, and add the GitHub environments, secrets and variables.
 
 For the restore test, staging needs some data first: add a few documents in the Firebase console under **Firestore**, or a test user under **Authentication > Users > Add user** once NKB-117 creates user records.
