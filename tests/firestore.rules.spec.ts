@@ -416,6 +416,38 @@ describe('an account whose email address is not verified', () => {
   });
 });
 
+describe('logged out (FR-1.12, NKB-206)', () => {
+  // Every collection the Worker keeps, each with a document in it, and one the model has not named.
+  const collections = [
+    USERS,
+    MEMBERS,
+    DIRECTORY,
+    AUDIT_LOG,
+    JOB_STATUS,
+    EMAIL_VERIFICATIONS,
+    PASSWORD_RESETS,
+    SESSIONS,
+    'anything',
+  ];
+
+  beforeEach(async () => {
+    for (const name of collections) {
+      await seed(`${name}/ama`, { a: 1 });
+    }
+  });
+
+  it('can read and write nothing, as the public pages need no data', async () => {
+    const db = env.unauthenticatedContext().firestore();
+    for (const name of collections) {
+      await assertFails(getDoc(doc(db, name, 'ama')));
+      await assertFails(getDocs(collection(db, name)));
+      await assertFails(setDoc(doc(db, name, 'kofi'), { a: 1 }));
+      await assertFails(updateDoc(doc(db, name, 'ama'), { a: 2 }));
+      await assertFails(deleteDoc(doc(db, name, 'ama')));
+    }
+  });
+});
+
 describe('everything else', () => {
   it('is closed by default', async () => {
     await assertFails(setDoc(doc(as('ama'), 'anything', 'ama'), { a: 1 }));
