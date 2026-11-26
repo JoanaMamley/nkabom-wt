@@ -7,6 +7,7 @@ import {
 } from 'jose';
 
 import { isDemoProject, type Env } from './env';
+import { lookupAccount } from './firebase-auth';
 import { HttpError } from './http';
 
 // Google's public keys for Firebase ID tokens. jose caches them and refetches when a token names a
@@ -34,7 +35,17 @@ export interface User {
   signInProvider: string | null;
 }
 
-// Checks the Firebase ID token. Endpoints call it through requireAccount (users.ts).
+const INVALID_SIGN_IN = 'Invalid or expired sign-in';
+
+/**
+ * Checks the Firebase ID token, then that its sign-in still stands, as the Admin SDK's
+ * verifyIdToken does when asked to check revocation (NKB-209): the account must exist, not be
+ * disabled, and have been signed in to no earlier than its validSince. Firebase moves validSince
+ * on when the password changes (NKB-203) and the Worker does when it deactivates an admin, so
+ * other sign-ins end at once rather than when their ID token expires, up to an hour later. A
+ * failure to look the account up is not the caller's fault, so it is a 500, not a 401 that logs
+ * them out. Endpoints call this through requireAccount (users.ts).
+ */
 export async function requireUser(
   request: Request,
   env: Env,
@@ -44,11 +55,21 @@ export async function requireUser(
   if (!match) {
     throw new HttpError(401, 'Sign in required');
   }
+  let user: User;
   try {
-    return await verifyIdToken(match[1], env, keys);
+    user = await verifyIdToken(match[1], env, keys);
   } catch {
-    throw new HttpError(401, 'Invalid or expired sign-in');
+    throw new HttpError(401, INVALID_SIGN_IN);
   }
+  const account = await lookupAccount(env, user.uid);
+  if (
+    !account ||
+    account.disabled ||
+    (account.validSince !== null && user.authTime < account.validSince)
+  ) {
+    throw new HttpError(401, INVALID_SIGN_IN);
+  }
+  return user;
 }
 
 // The same checks as the Firebase Admin SDK: signed by Google with RS256, issued for this project,

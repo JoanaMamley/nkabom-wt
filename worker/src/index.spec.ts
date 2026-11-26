@@ -15,6 +15,8 @@ const DOCUMENTS =
   'https://firestore.googleapis.com/v1/projects/nkabom-staging/databases/(default)/documents';
 const USERS_DOC = `${DOCUMENTS}/users/ama`;
 const COMMIT = `${DOCUMENTS}:commit`;
+const ACCOUNTS_LOOKUP =
+  'https://identitytoolkit.googleapis.com/v1/projects/nkabom-staging/accounts:lookup';
 
 let google: Awaited<ReturnType<typeof signingKey>>;
 let serviceAccount: string;
@@ -50,9 +52,14 @@ function sessionWrites(url: string): Response | null {
   return null;
 }
 
-// Stands in for Google: its token keys, the OAuth token exchange and Firestore.
+// Stands in for Google: its token keys, the OAuth token exchange, Firebase Auth's account lookup
+// (giving the account, by default one whose sign-ins are valid since an hour ago) and Firestore.
 function mockGoogle(
   usersDoc: Response = Response.json({ fields: { role: { stringValue: 'member' } } }),
+  account: Record<string, unknown> | null = {
+    localId: 'ama',
+    validSince: String(Math.floor(Date.now() / 1000) - 3600),
+  },
 ) {
   return vi.spyOn(globalThis, 'fetch').mockImplementation(async (input) => {
     const url = input instanceof Request ? input.url : String(input);
@@ -61,6 +68,9 @@ function mockGoogle(
     }
     if (url === 'https://oauth2.googleapis.com/token') {
       return Response.json({ access_token: 'google-access-token', expires_in: 3600 });
+    }
+    if (url === ACCOUNTS_LOOKUP) {
+      return Response.json(account ? { users: [account] } : {});
     }
     if (url === USERS_DOC) {
       return usersDoc.clone();
@@ -145,6 +155,60 @@ describe('GET /v1/me', () => {
           updateTransforms: [{ fieldPath: 'createdAt', setToServerValue: 'REQUEST_TIME' }],
         },
       ],
+    });
+  });
+
+  // NKB-209: a sign-in revoked since it began ends at once, not when its ID token expires.
+  describe('revoked sign-ins', () => {
+    const now = () => Math.floor(Date.now() / 1000);
+
+    it('refuses a sign-in from before the account’s validSince, as after a password change', async () => {
+      mockGoogle(undefined, { localId: 'ama', validSince: String(now() + 5) });
+      const token = await signToken(google.privateKey, 'google-1', claims());
+
+      const response = await call('/v1/me', { headers: { Authorization: `Bearer ${token}` } });
+
+      expect(response.status).toBe(401);
+      expect(await response.json()).toEqual({ error: 'Invalid or expired sign-in' });
+    });
+
+    it('accepts a sign-in made in the second validSince names', async () => {
+      const token = await signToken(google.privateKey, 'google-1', claims());
+      const { auth_time } = claims();
+      mockGoogle(undefined, { localId: 'ama', validSince: String(auth_time) });
+
+      const response = await call('/v1/me', { headers: { Authorization: `Bearer ${token}` } });
+
+      expect(response.status).toBe(200);
+    });
+
+    it('refuses a disabled account, such as a deactivated admin’s', async () => {
+      mockGoogle(undefined, { localId: 'ama', disabled: true });
+      const token = await signToken(google.privateKey, 'google-1', claims());
+
+      const response = await call('/v1/me', { headers: { Authorization: `Bearer ${token}` } });
+
+      expect(response.status).toBe(401);
+    });
+
+    it('refuses a deleted account', async () => {
+      mockGoogle(undefined, null);
+      const token = await signToken(google.privateKey, 'google-1', claims());
+
+      const response = await call('/v1/me', { headers: { Authorization: `Bearer ${token}` } });
+
+      expect(response.status).toBe(401);
+    });
+
+    it('looks the account up as the service account', async () => {
+      const fetch = mockGoogle();
+      const token = await signToken(google.privateKey, 'google-1', claims());
+
+      await call('/v1/me', { headers: { Authorization: `Bearer ${token}` } });
+
+      const [, init] = fetch.mock.calls.find(([url]) => String(url) === ACCOUNTS_LOOKUP)!;
+      expect(JSON.parse(String(init?.body))).toEqual({ localId: ['ama'] });
+      expect(init?.headers).toMatchObject({ Authorization: 'Bearer google-access-token' });
     });
   });
 

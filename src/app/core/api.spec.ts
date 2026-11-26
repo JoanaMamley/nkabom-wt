@@ -40,6 +40,19 @@ describe('Api', () => {
     expect(init.headers).toMatchObject({ Authorization: 'Bearer id-token' });
   });
 
+  it('patches and deletes, with the body only when there is one', async () => {
+    fetch.mockImplementation(async () => Response.json({ ok: true }));
+    const api = TestBed.inject(Api);
+
+    await api.patch('/v1/thing/1', { a: 1 });
+    await api.delete('/v1/thing/1');
+
+    const [[, patch], [, remove]] = fetch.mock.calls as [string, RequestInit][];
+    expect(patch).toMatchObject({ method: 'PATCH', body: '{"a":1}' });
+    expect(remove.method).toBe('DELETE');
+    expect(remove.body).toBeUndefined();
+  });
+
   it('sends no sign-in when signed out', async () => {
     fetch.mockResolvedValue(Response.json({}));
 

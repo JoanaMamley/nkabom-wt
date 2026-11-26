@@ -27,7 +27,7 @@
         </p>
         <div class="actions">
           <button type="button" class="primary" (click)="addAnother()">Add another admin</button>
-          <a routerLink="/home" class="button">Back to home</a>
+          <a routerLink="/admins" class="button">Back to admins</a>
         </div>
       } @else {
         <h1>Add an admin</h1>
@@ -104,7 +104,7 @@
             <button type="submit" class="primary" [disabled]="busy()">
               {{ busy() ? 'Adding…' : 'Add admin' }}
             </button>
-            <a routerLink="/home" class="button">Cancel</a>
+            <a routerLink="/admins" class="button">Cancel</a>
           </div>
         </form>
       }
