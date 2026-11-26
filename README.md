@@ -176,6 +176,14 @@ Once for each of `nkabom-staging` and `nkabom-prod`, signed in as the shared pro
 4. Set up the Worker for that environment: its secrets and KV namespaces ([Setting up the Worker](#setting-up-the-worker)), its email ([Setting up Gmail](#setting-up-gmail)) and its queue ([Setting up the queues](#setting-up-the-queues)).
 5. Run `npm run deploy:staging` (or `deploy:production`).
 
+## Logged-out access
+
+Everything needs a login except login, sign-up and the privacy notice (FR-1.12, NKB-206), with the two steps that confirm a sign-up's email address (`/check-email`, `/verify-email`), which the emailed link may open on another device, and the two that reset a forgotten password (`/forgot-password`, `/reset-password`). Each layer denies by default:
+
+- **Pages:** every route in [src/app/app.routes.ts](src/app/app.routes.ts) sits under one parent that runs `defaultDeny` ([src/app/core/guards.ts](src/app/core/guards.ts)). A page is for logged-in members with a verified email unless its route data opens it: `open('public')` for anyone, or `open('signedOut')` for anyone but someone already logged in, who goes to `/home`. Anyone else goes to `/login`. Add new pages inside that parent; [src/app/app.routes.spec.ts](src/app/app.routes.spec.ts) fails if a page sits outside it, and tries every page while logged out to check only the seven above open.
+- **Data:** the Firestore rules open nothing to a signed-out user, and any path they do not name is closed (see [Data model](#data-model)); `tests/firestore.rules.spec.ts` tries every collection logged out.
+- **Worker:** every endpoint needs a sign-in except the ones listed under [Worker](#worker).
+
 ## Worker
 
 The app's API is one Cloudflare Worker per environment, on the free plan at its `workers.dev` address, under the shared Cloudflare account's subdomain `nkabomwt-project`:
@@ -220,7 +228,7 @@ Sessions end after inactivity, and sooner for admins (NKB-205, FR-1.10). The lim
 
 - **The Worker** knows each sign-in by its time (the ID token's `auth_time`, which stays the same as Firebase renews the token) and keeps when it last called in `sessions/{uid}`. `requireAccount` refuses an expired sign-in with `401` `{"error":"Your session has expired. Please log in again."}`, and otherwise records the activity, writing at most once a minute. A sign-in it has not seen counts as idle since it began, so an old one cannot come back as new. Entries idle for more than 30 days are removed as others are written.
 - **The Firestore rules** check the same for admin reads: the sign-in must be under 12 hours old and active within the last 31 minutes (one more for the Worker's once-a-minute writes). A member's own reads are not checked there; the Worker and the app end those sessions.
-- **The app** ([src/app/core/session.ts](src/app/core/session.ts)) logs out on time by itself, using the limits `GET /v1/me` returns as `session` (`idleSeconds`, and `expiresAt` for admins). Activity is a tap, key press or scroll, shared between tabs. While the app is in use it calls `GET /v1/me` every few minutes (3 for admins, 5 for members), since reading Firestore alone tells the Worker nothing. A `401` from any Worker call logs out too, and the login page then says the session has expired. The logged-in pages' route guard starts this watching however someone arrives, such as straight after confirming their email. An admin who closes the app straight after using it may therefore be logged out up to 3 minutes early.
+- **The app** ([src/app/core/session.ts](src/app/core/session.ts)) logs out on time by itself, using the limits `GET /v1/me` returns as `session` (`idleSeconds`, and `expiresAt` for admins). Activity is a tap, key press or scroll, shared between tabs. While the app is in use it calls `GET /v1/me` every few minutes (3 for admins, 5 for members), since reading Firestore alone tells the Worker nothing. A `401` from any Worker call logs out too, and the login page then says the session has expired. The default-deny route guard starts this watching on every logged-in page, however someone arrives, such as straight after confirming their email. An admin who closes the app straight after using it may therefore be logged out up to 3 minutes early.
 - Firebase renews ID tokens itself; nothing here changes that.
 
 To change a limit, change it in `sessions.ts` and in `adminSessionActive` in [firestore.rules](firestore.rules).
