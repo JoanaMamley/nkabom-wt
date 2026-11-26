@@ -276,7 +276,7 @@ Members can log in or sign up with Google (NKB-210, FR-1.1): **Continue with Goo
 
 ### Setting up Google login
 
-Once per project, signed in as the shared account. Not yet done on either project; check it on staging, on a computer, an Android phone and an iPhone with the app installed, before production.
+Once per project, signed in as the shared account. Done on both projects (November 2026); still to check on staging, on a computer, an Android phone and an iPhone with the app installed, and on production after its next release.
 
 1. **Turn on the provider.** [Firebase console](https://console.firebase.google.com) > the project > **Security > Authentication** (or **Build > Authentication**) **> Sign-in method > Add new provider > Google > Enable**. **Public-facing name:** `Nkabom`. **Support email:** the shared account. **Save.** Firebase creates the OAuth client it needs.
 2. **Check the authorized domains:** **Authentication > Settings > Authorized domains** lists `localhost`, `<project>.firebaseapp.com` and `<project>.web.app` by default. Leave them.
