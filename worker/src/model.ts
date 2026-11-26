@@ -42,6 +42,13 @@ export const MAX_PHOTO_BYTES = 5 * 1024 * 1024;
 export interface UserRecord {
   role: Role;
   email: string | null;
+  /**
+   * An admin's name and the Google account for the birthday calendar (FR-1.6), given when the
+   * admin is created (scripts/create-primary-admin.mjs for the first, NKB-208 for the rest).
+   * Members have neither: their name is in members/{uid}.
+   */
+  name?: string;
+  calendarEmail?: string;
   createdAt: Date;
 }
 

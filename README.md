@@ -45,7 +45,7 @@ Local work uses the `demo-nkabom` project ID, so no Firebase login or credential
 | `npm run build:worker`      | Type-check the Worker and bundle it (dry run)          |
 | `npm test`                  | App unit tests (Vitest)                                |
 | `npm run test:worker`       | Worker tests (Vitest, in the Workers runtime)          |
-| `npm run test:rules`        | Firestore security rules tests (emulator)              |
+| `npm run test:rules`        | Firestore rules and setup script tests (emulators)     |
 | `npm run lint`              | ESLint (TypeScript and templates)                      |
 | `npm run format`            | Format with Prettier                                   |
 | `npm run format:check`      | Check formatting without writing                       |
@@ -175,6 +175,20 @@ Once for each of `nkabom-staging` and `nkabom-prod`, signed in as the shared pro
 3. **Project settings > Your apps**: add a web app, then copy its config into `src/environments/environment.staging.ts` (staging) or `environment.ts` (production), with `privacyContact` set to the privacy notice's contact address, locally only (see [Configuration and secrets](#configuration-and-secrets)).
 4. Set up the Worker for that environment: its secrets and KV namespaces ([Setting up the Worker](#setting-up-the-worker)), its email ([Setting up Gmail](#setting-up-gmail)) and its queue ([Setting up the queues](#setting-up-the-queues)).
 5. Run `npm run deploy:staging` (or `deploy:production`).
+6. Create the first Primary Admin ([First Primary Admin](#first-primary-admin)).
+
+### First Primary Admin
+
+The first Primary Admin is created once, when a project is set up (FR-1.6, NKB-207); after that, a Primary Admin creates the other admins in the app (NKB-208). [scripts/create-primary-admin.mjs](scripts/create-primary-admin.mjs) creates the Firebase Auth account with its email marked verified, writes its `users` record with the role `primaryAdmin`, their name and the Google account for the birthday calendar, and sets the role claim. Generate a service account key as for a restore ([Restoring](#restoring)), then, from the repo root:
+
+```sh
+node scripts/create-primary-admin.mjs --project nkabom-prod --key ~/Downloads/nkabom-prod-firebase-adminsdk-….json \
+  --email ama@example.com --name "Ama Mensah" --calendar-email ama@gmail.com
+```
+
+`--calendar-email` can be left out when it is the login address. It asks you to type the project ID before writing anything. It stops, saying why and changing nothing, if the project already has a Primary Admin or the address already has an account. The account gets a random password that no one sees: the Primary Admin sets their own with **Forgot password?** on the login page, which also proves they own the address, then logs in. Afterwards delete the key file as after a restore.
+
+Locally, leave out `--project` and `--key` to create one in the emulators that `npm start` runs (project `demo-nkabom`). The password reset email, link included, is then printed in the `wrangler dev` output ([Email](#email)). `tests/create-primary-admin.spec.ts` runs the script against the emulators in `npm run test:rules`.
 
 ## Logged-out access
 
