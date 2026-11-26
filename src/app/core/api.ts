@@ -45,6 +45,14 @@ export class Api {
     return this.request<T>('POST', path, JSON.stringify(body));
   }
 
+  patch<T>(path: string, body: unknown = {}): Promise<T> {
+    return this.request<T>('PATCH', path, JSON.stringify(body));
+  }
+
+  delete<T>(path: string): Promise<T> {
+    return this.request<T>('DELETE', path);
+  }
+
   private async request<T>(method: string, path: string, body?: string): Promise<T> {
     const headers: Record<string, string> = { 'Content-Type': 'application/json' };
     const user = this.auth.currentUser;

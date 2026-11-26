@@ -35,11 +35,11 @@ describe('HomePage', () => {
     return fixture.nativeElement as HTMLElement;
   }
 
-  it('offers a Primary Admin the page to add an admin (FR-1.6)', async () => {
+  it('offers a Primary Admin the page to manage admins (FR-1.6, FR-1.7)', async () => {
     api.get.mockResolvedValue({ uid: 'efua', role: 'primaryAdmin' });
     const page = await render();
 
-    expect(page.querySelector('a[href="/admins"]')?.textContent).toContain('Add an admin');
+    expect(page.querySelector('a[href="/admins"]')?.textContent).toContain('Manage admins');
   });
 
   it('offers it to no one else, nor when the role is unknown', async () => {

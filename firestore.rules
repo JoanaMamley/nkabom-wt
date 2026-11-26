@@ -16,10 +16,12 @@ service cloud.firestore {
     }
 
     // An admin or Primary Admin (FR-1.5, FR-1.11). The role claim on the token (set by the Worker,
-    // firebase-auth.ts) must agree with the account's users record, so an account demoted or
-    // deactivated there loses admin reads at once, without waiting for its token to expire.
-    // A token with no claim is a member's. The claim is checked first, so members cost no lookup;
-    // an admin's costs one read of their own record, and an account with no record is denied.
+    // firebase-auth.ts) must agree with the account's users record, so an account demoted there
+    // loses admin reads at once, without waiting for its token to expire. A deactivated admin's
+    // record says so (NKB-209), which ends their reads at once too: the rules cannot ask Firebase
+    // whether a sign-in was revoked, as the Worker does. A token with no claim is a member's. The
+    // claim is checked first, so members cost no lookup; an admin's costs one read of their own
+    // record, and an account with no record is denied.
     //
     // Admins log in with email and password only (FR-1.9, NKB-208), so an admin signed in another
     // way, such as with Google once members can (NKB-210), gets no admin reads.
@@ -27,9 +29,12 @@ service cloud.firestore {
       return isVerified()
         && request.auth.token.get('role', 'member') in ['admin', 'primaryAdmin']
         && request.auth.token.firebase.sign_in_provider == 'password'
-        && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role
-          in ['admin', 'primaryAdmin']
+        && activeAdminRecord(get(/databases/$(database)/documents/users/$(request.auth.uid)).data)
         && adminSessionActive();
+    }
+
+    function activeAdminRecord(user) {
+      return user.role in ['admin', 'primaryAdmin'] && user.get('status', 'active') == 'active';
     }
 
     // Admin sessions end after 30 minutes idle or 12 hours in all (FR-1.10, NKB-205), as in

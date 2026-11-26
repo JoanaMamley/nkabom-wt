@@ -21,7 +21,7 @@ export class HomePage implements OnInit {
   private readonly session = inject(Session);
 
   protected readonly email = signal<string | null>(null);
-  /** Whether to offer adding an admin (FR-1.6), which only a Primary Admin can. */
+  /** Whether to offer managing admins (FR-1.6, FR-1.7), which only a Primary Admin can. */
   protected readonly primaryAdmin = signal(false);
 
   async ngOnInit(): Promise<void> {

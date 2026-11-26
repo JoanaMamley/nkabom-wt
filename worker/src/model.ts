@@ -15,6 +15,11 @@ export const SESSIONS = 'sessions';
 export const ROLES = ['member', 'admin', 'primaryAdmin'] as const;
 export type Role = (typeof ROLES)[number];
 
+// NKB-209: an admin account is active until a Primary Admin deactivates it. Members' records have
+// no status here: theirs is in members/{uid}.
+export const ACCOUNT_STATUSES = ['active', 'deactivated'] as const;
+export type AccountStatus = (typeof ACCOUNT_STATUSES)[number];
+
 export const MEMBER_STATUSES = ['pending', 'active', 'rejected', 'deactivated'] as const;
 export type MemberStatus = (typeof MEMBER_STATUSES)[number];
 
@@ -49,6 +54,14 @@ export interface UserRecord {
    */
   name?: string;
   calendarEmail?: string;
+  /**
+   * Missing means active. A deactivated admin is refused by the Worker and the rules at once, and
+   * their Firebase account is disabled (NKB-209). Reactivating sets it back to active.
+   */
+  status?: AccountStatus;
+  /** When the admin was last deactivated, kept after a reactivation. */
+  deactivatedAt?: Date;
+  reactivatedAt?: Date;
   createdAt: Date;
 }
 
@@ -104,6 +117,7 @@ export const AUDIT_ACTIONS = [
   'admin.create',
   'admin.roleChange',
   'admin.deactivate',
+  'admin.reactivate',
   'admin.delete',
   'registration.approve',
   'registration.reject',

@@ -1,6 +1,13 @@
 import { requireUser, type User } from './auth';
 import type { Env } from './env';
-import { commit, FirestoreError, getDocument, SERVER_TIME, WriteBatch } from './firestore';
+import {
+  commit,
+  FirestoreError,
+  getDocument,
+  SERVER_TIME,
+  WriteBatch,
+  type Fields,
+} from './firestore';
 import { setRoleClaim } from './firebase-auth';
 import { HttpError } from './http';
 import { ADMIN_ROLES } from './roles';
@@ -17,9 +24,9 @@ export interface Account extends User {
 
 /**
  * Every endpoint except the health check calls this first (FR-1.11). It checks the sign-in and
- * reads the caller's users record, so the role is current on every call and a removed admin loses
- * access at once. The first call from a new account creates its record as a member, which is why
- * the app calls GET /v1/me straight after sign-up. An account whose email address is not yet
+ * reads the caller's users record, so the role is current on every call and a demoted or
+ * deactivated admin loses access at once. The first call from a new account creates its record as
+ * a member, which is why the app calls GET /v1/me straight after sign-up. An account whose email address is not yet
  * verified is refused, so it cannot log in (FR-1.2, verification.ts). A sign-in that has expired
  * is refused with 401, and otherwise its activity is recorded (FR-1.10, sessions.ts).
  */
@@ -28,7 +35,13 @@ export async function requireAccount(request: Request, env: Env): Promise<Accoun
   if (!user.emailVerified) {
     throw new HttpError(403, 'Verify your email address first');
   }
-  const role = await userRole(env, user);
+  const { role, status } = await userRecord(env, user);
+  // A deactivated admin (NKB-209) is refused as a revoked sign-in is, with 401, so the app logs
+  // them out. Firebase refuses their sign-ins too (requireUser), but the record is checked here
+  // so it alone is enough, as it is for the rules.
+  if (status === 'deactivated') {
+    throw new HttpError(401, 'This account has been deactivated');
+  }
   // FR-1.9: admins log in with email and password only, so an admin signed in another way, such
   // as with Google once members can (NKB-210), gets nothing. The rules check the same.
   if (ADMIN_ROLES.includes(role) && user.signInProvider !== 'password') {
@@ -58,11 +71,16 @@ function isRole(role: string): role is Role {
   return (ROLES as readonly string[]).includes(role);
 }
 
-async function userRole(env: Env, user: User): Promise<string> {
+/** The account's role and status from its users record, creating a member's on the first call. */
+async function userRecord(env: Env, user: User): Promise<{ role: string; status: string }> {
   const path = `${USERS}/${user.uid}`;
+  const read = (record: Fields | null) => ({
+    role: String(record?.['role']),
+    status: String(record?.['status'] ?? 'active'),
+  });
   const record = await getDocument(env, path);
   if (record) {
-    return String(record['role']);
+    return read(record);
   }
 
   // create, not set: admin accounts (NKB-208) write their own record, which must not be replaced
@@ -71,11 +89,11 @@ async function userRole(env: Env, user: User): Promise<string> {
   batch.create(path, { role: 'member', email: user.email, createdAt: SERVER_TIME });
   try {
     await commit(env, batch);
-    return 'member';
+    return { role: 'member', status: 'active' };
   } catch (error) {
     if (!(error instanceof FirestoreError && error.status === 'ALREADY_EXISTS')) {
       throw error;
     }
-    return String((await getDocument(env, path))?.['role']);
+    return read(await getDocument(env, path));
   }
 }

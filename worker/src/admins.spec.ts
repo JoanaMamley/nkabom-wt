@@ -16,6 +16,8 @@ interface FakeAccount {
   emailVerified?: boolean;
   passwordUpdatedAt?: number;
   customAttributes?: string;
+  disabled?: boolean;
+  validSince?: string;
 }
 
 let firestore: FakeFirestore;
@@ -24,10 +26,12 @@ let log: ReturnType<typeof vi.spyOn>;
 let created = 0;
 // Firebase refuses the next create, as when another request made the account first.
 let racingCreate: boolean;
+// Firebase fails to delete accounts.
+let failDelete: boolean;
 
 // Stands in for the Auth emulator, with its accounts, and the Firestore emulator. Efua is the
 // Primary Admin, Kofi an admin and Ama a member. Like the emulator, setting a password moves
-// passwordUpdatedAt on.
+// passwordUpdatedAt and validSince on, and disableUser disables the account.
 beforeEach(() => {
   firestore = new FakeFirestore();
   firestore.docs.set('users/efua', { role: 'primaryAdmin', email: 'efua@example.com' });
@@ -41,6 +45,7 @@ beforeEach(() => {
   );
   created = 0;
   racingCreate = false;
+  failDelete = false;
   log = vi.spyOn(console, 'log').mockImplementation(() => undefined);
   vi.spyOn(console, 'error').mockImplementation(() => undefined);
   vi.spyOn(globalThis, 'fetch').mockImplementation(async (input, init) => {
@@ -63,13 +68,31 @@ beforeEach(() => {
       return Response.json(account ? { users: [{ localId: uid, ...account }] } : {});
     }
     if (url.endsWith('accounts:update')) {
-      const account = accounts.get(body['localId'] as string)!;
-      const moved = 'password' in body ? { passwordUpdatedAt: account.passwordUpdatedAt! + 1 } : {};
-      Object.assign(account, body, moved);
+      const account = accounts.get(body['localId'] as string);
+      if (!account) {
+        return Response.json({ error: { message: 'USER_NOT_FOUND' } }, { status: 400 });
+      }
+      const { disableUser, ...rest } = body;
+      const moved =
+        'password' in body
+          ? {
+              passwordUpdatedAt: account.passwordUpdatedAt! + 1,
+              validSince: String(Math.floor(Date.now() / 1000)),
+            }
+          : {};
+      Object.assign(
+        account,
+        rest,
+        moved,
+        disableUser === undefined ? {} : { disabled: disableUser },
+      );
       return Response.json({ localId: body['localId'] });
     }
     if (url.endsWith('accounts:delete')) {
-      accounts.delete(body['localId'] as string);
+      if (failDelete || !accounts.delete(body['localId'] as string)) {
+        const message = failDelete ? 'INTERNAL' : 'USER_NOT_FOUND';
+        return Response.json({ error: { message } }, { status: failDelete ? 500 : 400 });
+      }
       return Response.json({});
     }
     if (firestore.handles(url)) {
@@ -83,13 +106,24 @@ afterEach(() => {
   vi.restoreAllMocks();
 });
 
-function post(path: string, body: unknown, uid: string | null, testEnv: Env = env, extra = {}) {
+function send(
+  method: string,
+  path: string,
+  body: unknown,
+  uid: string | null,
+  testEnv: Env = env,
+  extra = {},
+) {
   const request = new Request(`https://api.test${path}`, {
-    method: 'POST',
+    method,
     headers: { 'Content-Type': 'application/json', ...(uid ? signedIn(uid, extra) : {}) },
-    body: JSON.stringify(body),
+    ...(body === undefined ? {} : { body: JSON.stringify(body) }),
   }) as Request<unknown, IncomingRequestCfProperties>;
   return worker.fetch(request, testEnv);
+}
+
+function post(path: string, body: unknown, uid: string | null, testEnv: Env = env, extra = {}) {
+  return send('POST', path, body, uid, testEnv, extra);
 }
 
 const NEW_ADMIN = { name: 'Abena Owusu', email: ' Abena@Example.com ' };
@@ -305,5 +339,459 @@ describe('admin sign-in methods (FR-1.9)', () => {
 
   it('lets a member sign in another way', async () => {
     expect((await me('ama', 'google.com')).status).toBe(200);
+  });
+});
+
+// NKB-209. Efua and Esi are Primary Admins, Kofi an admin and Ama a member.
+describe('managing admins (FR-1.6, FR-1.7)', () => {
+  beforeEach(() => {
+    firestore.docs.set('users/efua', {
+      role: 'primaryAdmin',
+      email: 'efua@example.com',
+      name: 'Efua Asante',
+    });
+    firestore.docs.set('users/esi', {
+      role: 'primaryAdmin',
+      email: 'esi@example.com',
+      name: 'Esi',
+    });
+    firestore.docs.set('users/kofi', {
+      role: 'admin',
+      email: 'kofi@example.com',
+      name: 'Kofi Boateng',
+      calendarEmail: 'kofi@gmail.com',
+    });
+    accounts.set('esi', { email: 'esi@example.com', emailVerified: true, passwordUpdatedAt: 1 });
+  });
+
+  const list = (uid = 'efua') => send('GET', '/v1/admins', undefined, uid);
+  const setRole = (target: string, role: unknown, uid = 'efua') =>
+    send('PATCH', `/v1/admins/${target}`, { role }, uid);
+  const deactivate = (target: string, uid = 'efua') =>
+    post(`/v1/admins/${target}/deactivate`, {}, uid);
+  const reactivate = (target: string, uid = 'efua') =>
+    post(`/v1/admins/${target}/reactivate`, {}, uid);
+  const remove = (target: string, uid = 'efua') =>
+    send('DELETE', `/v1/admins/${target}`, undefined, uid);
+  // A call from a sign-in that began a minute ago, before anything a test does.
+  const me = (uid: string) =>
+    send('GET', '/v1/me', undefined, uid, env, { auth_time: Math.floor(Date.now() / 1000) - 60 });
+  const actions = () => auditEntries().map(([, entry]) => entry['action']);
+
+  describe('GET /v1/admins', () => {
+    it('lists every admin by name, marking the caller', async () => {
+      firestore.docs.set('users/yaw', {
+        role: 'admin',
+        email: 'yaw@example.com',
+        name: 'Akua',
+        status: 'deactivated',
+      });
+
+      const response = await list();
+
+      expect(response.status).toBe(200);
+      expect(await response.json()).toEqual({
+        admins: [
+          {
+            uid: 'yaw',
+            name: 'Akua',
+            email: 'yaw@example.com',
+            calendarEmail: null,
+            role: 'admin',
+            status: 'deactivated',
+            self: false,
+          },
+          {
+            uid: 'efua',
+            name: 'Efua Asante',
+            email: 'efua@example.com',
+            calendarEmail: null,
+            role: 'primaryAdmin',
+            status: 'active',
+            self: true,
+          },
+          expect.objectContaining({ uid: 'esi', role: 'primaryAdmin' }),
+          expect.objectContaining({ uid: 'kofi', calendarEmail: 'kofi@gmail.com' }),
+        ],
+      });
+    });
+
+    it('lists an admin once even if their role changes between the two queries', async () => {
+      const fake = vi.mocked(globalThis.fetch).getMockImplementation()!;
+      let queries = 0;
+      vi.mocked(globalThis.fetch).mockImplementation(async (input, init) => {
+        if (String(input).endsWith(':runQuery') && ++queries === 2) {
+          // Kofi is promoted after the query for admins has found him.
+          firestore.docs.set('users/kofi', {
+            ...firestore.docs.get('users/kofi'),
+            role: 'primaryAdmin',
+          });
+        }
+        return fake(input, init);
+      });
+
+      const { admins } = (await (await list()).json()) as { admins: { uid: string }[] };
+
+      expect(admins.filter(({ uid }) => uid === 'kofi')).toHaveLength(1);
+    });
+
+    it('is for Primary Admins only', async () => {
+      expect((await list('kofi')).status).toBe(403);
+      expect((await list('ama')).status).toBe(403);
+    });
+  });
+
+  describe('PATCH /v1/admins/{uid}', () => {
+    it('promotes an admin to Primary Admin, with the claim and an audit entry', async () => {
+      const response = await setRole('kofi', 'primaryAdmin');
+
+      expect(response.status).toBe(200);
+      expect(await response.json()).toEqual({ uid: 'kofi', role: 'primaryAdmin' });
+      expect(firestore.docs.get('users/kofi')?.['role']).toBe('primaryAdmin');
+      expect(JSON.parse(accounts.get('kofi')!.customAttributes!)).toEqual({
+        role: 'primaryAdmin',
+      });
+      expect(auditEntries().map(([, entry]) => entry)).toMatchObject([
+        {
+          actor: { uid: 'efua' },
+          action: 'admin.roleChange',
+          target: { type: 'admin', id: 'kofi' },
+          details: { from: 'admin', to: 'primaryAdmin', email: 'kofi@example.com' },
+        },
+      ]);
+      // Kofi can now manage admins.
+      expect((await list('kofi')).status).toBe(200);
+    });
+
+    it('demotes another Primary Admin, who loses the right to manage admins at once', async () => {
+      expect((await setRole('esi', 'admin')).status).toBe(200);
+
+      expect(firestore.docs.get('users/esi')?.['role']).toBe('admin');
+      expect((await list('esi')).status).toBe(403);
+      expect(actions()).toEqual(['admin.roleChange']);
+    });
+
+    it('changes nothing when the admin already has the role', async () => {
+      expect((await setRole('kofi', 'admin')).status).toBe(200);
+      expect(auditEntries()).toEqual([]);
+    });
+
+    it('never lets the last Primary Admin be demoted, as no one can demote themselves', async () => {
+      firestore.docs.delete('users/esi');
+
+      const response = await setRole('efua', 'admin');
+
+      expect(response.status).toBe(403);
+      expect(await response.json()).toEqual({
+        error: 'You cannot change your own admin account. Ask another Primary Admin.',
+      });
+      expect(firestore.docs.get('users/efua')?.['role']).toBe('primaryAdmin');
+    });
+
+    it('leaves one Primary Admin when two demote each other at once', async () => {
+      // Esi's request passes the role check, then, before her transaction reads the records,
+      // Efua's demotion of her commits.
+      const fake = vi.mocked(globalThis.fetch).getMockImplementation()!;
+      vi.mocked(globalThis.fetch).mockImplementation(async (input, init) => {
+        if (String(input).endsWith(':batchGet') && String(init?.body).includes('users/efua')) {
+          vi.mocked(globalThis.fetch).mockImplementation(fake);
+          expect((await setRole('esi', 'admin', 'efua')).status).toBe(200);
+        }
+        return fake(input, init);
+      });
+
+      const response = await setRole('efua', 'admin', 'esi');
+
+      expect(response.status).toBe(403);
+      expect(await response.json()).toEqual({ error: 'Only a Primary Admin can do this' });
+      expect(firestore.docs.get('users/efua')?.['role']).toBe('primaryAdmin');
+      expect(firestore.docs.get('users/esi')?.['role']).toBe('admin');
+      expect(actions()).toEqual(['admin.roleChange']);
+    });
+
+    it('accepts only the admin roles, and only for admins', async () => {
+      expect((await setRole('kofi', 'member')).status).toBe(400);
+      expect((await setRole('kofi', undefined)).status).toBe(400);
+      expect((await setRole('ama', 'primaryAdmin')).status).toBe(404);
+      expect((await setRole('nobody', 'primaryAdmin')).status).toBe(404);
+      expect((await setRole('not-a-uid', 'primaryAdmin')).status).toBe(404);
+      expect(firestore.docs.get('users/ama')?.['role']).toBe('member');
+    });
+
+    it('is for Primary Admins only', async () => {
+      expect((await setRole('esi', 'admin', 'kofi')).status).toBe(403);
+      expect((await setRole('kofi', 'primaryAdmin', 'ama')).status).toBe(403);
+      expect(auditEntries()).toEqual([]);
+    });
+
+    it('refuses to change a deactivated admin’s role', async () => {
+      await deactivate('kofi');
+
+      const response = await setRole('kofi', 'primaryAdmin');
+
+      expect(response.status).toBe(409);
+      expect(firestore.docs.get('users/kofi')?.['role']).toBe('admin');
+    });
+  });
+
+  describe('POST /v1/admins/{uid}/deactivate', () => {
+    it('ends the admin’s sessions at once and disables their account', async () => {
+      firestore.docs.set('sessions/kofi', { signIns: {} });
+      expect((await me('kofi')).status).toBe(200);
+
+      const response = await deactivate('kofi');
+
+      expect(response.status).toBe(200);
+      expect(await response.json()).toEqual({ uid: 'kofi', status: 'deactivated' });
+      expect(firestore.docs.get('users/kofi')).toMatchObject({
+        role: 'admin',
+        status: 'deactivated',
+        deactivatedAt: firestore.now,
+      });
+      expect(firestore.docs.has('sessions/kofi')).toBe(false);
+      expect(accounts.get('kofi')).toMatchObject({ disabled: true });
+      expect(actions()).toEqual(['admin.deactivate']);
+
+      const after = await me('kofi');
+      expect(after.status).toBe(401);
+    });
+
+    it('refuses the admin by their users record alone, if their account could not be disabled', async () => {
+      // As if the call to Firebase had failed: the record says deactivated, the account does not.
+      firestore.docs.set('users/kofi', { role: 'admin', status: 'deactivated' });
+
+      const response = await me('kofi');
+
+      expect(response.status).toBe(401);
+      expect(await response.json()).toEqual({ error: 'This account has been deactivated' });
+    });
+
+    it('refuses a sign-in revoked by Firebase alone, if the record were not changed', async () => {
+      accounts.get('kofi')!.validSince = String(Math.floor(Date.now() / 1000));
+
+      expect((await me('kofi')).status).toBe(401);
+    });
+
+    it('can be repeated, which disables the account again without a second audit entry', async () => {
+      await deactivate('kofi');
+      accounts.get('kofi')!.disabled = false;
+
+      expect((await deactivate('kofi')).status).toBe(200);
+
+      expect(accounts.get('kofi')).toMatchObject({ disabled: true });
+      expect(actions()).toEqual(['admin.deactivate']);
+    });
+
+    it('succeeds for an admin whose account a stalled deletion already removed', async () => {
+      accounts.delete('kofi');
+
+      expect((await deactivate('kofi')).status).toBe(200);
+      expect(firestore.docs.get('users/kofi')?.['status']).toBe('deactivated');
+    });
+
+    it('can deactivate another Primary Admin, but not the caller', async () => {
+      expect((await deactivate('esi')).status).toBe(200);
+      expect((await deactivate('efua')).status).toBe(403);
+      expect(firestore.docs.get('users/efua')?.['status']).toBeUndefined();
+    });
+
+    it('is for Primary Admins only, and only for admins', async () => {
+      expect((await deactivate('esi', 'kofi')).status).toBe(403);
+      expect((await deactivate('ama')).status).toBe(404);
+      expect(accounts.get('ama')?.disabled).toBeUndefined();
+      expect(auditEntries()).toEqual([]);
+    });
+
+    it('stops a deactivated Primary Admin from managing admins', async () => {
+      await deactivate('esi');
+
+      expect((await deactivate('kofi', 'esi')).status).toBe(401);
+      expect(firestore.docs.get('users/kofi')?.['status']).toBeUndefined();
+    });
+  });
+
+  describe('POST /v1/admins/{uid}/reactivate', () => {
+    it('lets a deactivated admin log in again, keeping their account and role', async () => {
+      await deactivate('kofi');
+
+      const response = await reactivate('kofi');
+
+      expect(response.status).toBe(200);
+      expect(await response.json()).toEqual({ uid: 'kofi', status: 'active' });
+      expect(firestore.docs.get('users/kofi')).toMatchObject({
+        role: 'admin',
+        status: 'active',
+        reactivatedAt: firestore.now,
+        calendarEmail: 'kofi@gmail.com',
+      });
+      expect(accounts.get('kofi')).toMatchObject({ disabled: false, passwordUpdatedAt: 1 });
+      expect(auditEntries().map(([, entry]) => entry)).toMatchObject([
+        { action: 'admin.deactivate' },
+        {
+          actor: { uid: 'efua' },
+          action: 'admin.reactivate',
+          target: { type: 'admin', id: 'kofi' },
+          details: { email: 'kofi@example.com' },
+        },
+      ]);
+      // A new sign-in works; the one from before the deactivation stays revoked.
+      expect((await send('GET', '/v1/me', undefined, 'kofi')).status).toBe(200);
+      expect((await me('kofi')).status).toBe(401);
+    });
+
+    it('keeps the admin out if their account cannot be enabled, and can be tried again', async () => {
+      await deactivate('kofi');
+      const update = vi.mocked(globalThis.fetch).getMockImplementation()!;
+      const failing = vi
+        .mocked(globalThis.fetch)
+        .mockImplementation(async (input, init) =>
+          String(input).endsWith('accounts:update')
+            ? Response.json({ error: { message: 'INTERNAL' } }, { status: 500 })
+            : update(input, init),
+        );
+
+      const response = await reactivate('kofi');
+
+      expect(response.status).toBe(502);
+      expect(firestore.docs.get('users/kofi')?.['status']).toBe('active');
+      expect((await send('GET', '/v1/me', undefined, 'kofi')).status).toBe(401);
+
+      failing.mockImplementation(update);
+      expect((await reactivate('kofi')).status).toBe(200);
+      expect(accounts.get('kofi')?.disabled).toBe(false);
+      expect(actions()).toEqual(['admin.deactivate', 'admin.reactivate']);
+    });
+
+    it('refuses an admin whose account a stalled deletion already removed', async () => {
+      await deactivate('kofi');
+      accounts.delete('kofi');
+
+      const response = await reactivate('kofi');
+
+      expect(response.status).toBe(409);
+      expect(firestore.docs.get('users/kofi')?.['status']).toBe('deactivated');
+      expect((await remove('kofi')).status).toBe(200);
+    });
+
+    it('changes nothing for an active admin', async () => {
+      expect((await reactivate('kofi')).status).toBe(200);
+      expect(firestore.docs.get('users/kofi')?.['status']).toBeUndefined();
+      expect(auditEntries()).toEqual([]);
+    });
+
+    it('lets a reactivated admin’s role be changed again', async () => {
+      await deactivate('kofi');
+      await reactivate('kofi');
+
+      expect((await setRole('kofi', 'primaryAdmin')).status).toBe(200);
+    });
+
+    it('is for Primary Admins only, never on the caller, and only for admins', async () => {
+      await deactivate('esi');
+      expect((await reactivate('esi', 'kofi')).status).toBe(403);
+      expect((await reactivate('efua')).status).toBe(403);
+      expect((await reactivate('ama')).status).toBe(404);
+      expect(firestore.docs.get('users/esi')?.['status']).toBe('deactivated');
+      expect(accounts.get('esi')?.disabled).toBe(true);
+    });
+  });
+
+  describe('DELETE /v1/admins/{uid}', () => {
+    it('deletes the account and its records, keeping the audit entry', async () => {
+      for (const collection of ['sessions', 'emailVerifications', 'passwordResets']) {
+        firestore.docs.set(`${collection}/kofi`, { kept: false });
+      }
+
+      const response = await remove('kofi');
+
+      expect(response.status).toBe(200);
+      expect(await response.json()).toEqual({ uid: 'kofi', deleted: true });
+      expect(accounts.has('kofi')).toBe(false);
+      for (const collection of ['users', 'sessions', 'emailVerifications', 'passwordResets']) {
+        expect(firestore.docs.has(`${collection}/kofi`)).toBe(false);
+      }
+      expect(auditEntries().map(([, entry]) => entry)).toMatchObject([
+        {
+          actor: { uid: 'efua' },
+          action: 'admin.delete',
+          target: { type: 'admin', id: 'kofi' },
+          details: { email: 'kofi@example.com' },
+        },
+      ]);
+    });
+
+    it('deletes another Primary Admin, but never the caller, so one always remains', async () => {
+      expect((await remove('esi')).status).toBe(200);
+
+      const response = await remove('efua');
+
+      expect(response.status).toBe(403);
+      expect(accounts.has('efua')).toBe(true);
+      expect(firestore.docs.get('users/efua')?.['role']).toBe('primaryAdmin');
+    });
+
+    it('leaves the admin deactivated if their account cannot be deleted, and can be tried again', async () => {
+      failDelete = true;
+
+      const response = await remove('kofi');
+
+      expect(response.status).toBe(502);
+      expect(firestore.docs.get('users/kofi')?.['status']).toBe('deactivated');
+      expect((await me('kofi')).status).toBe(401);
+      expect(auditEntries()).toEqual([]);
+
+      failDelete = false;
+      expect((await remove('kofi')).status).toBe(200);
+      expect(accounts.has('kofi')).toBe(false);
+      expect(firestore.docs.has('users/kofi')).toBe(false);
+    });
+
+    it('finishes a deletion whose account is already gone', async () => {
+      accounts.delete('kofi');
+
+      expect((await remove('kofi')).status).toBe(200);
+      expect(firestore.docs.has('users/kofi')).toBe(false);
+    });
+
+    it('deletes a deactivated admin', async () => {
+      await deactivate('kofi');
+
+      expect((await remove('kofi')).status).toBe(200);
+      expect(actions()).toEqual(['admin.deactivate', 'admin.delete']);
+    });
+
+    it('is for Primary Admins only, and only for admins', async () => {
+      expect((await remove('esi', 'kofi')).status).toBe(403);
+      expect((await remove('ama')).status).toBe(404);
+      expect(accounts.has('ama')).toBe(true);
+      expect(firestore.docs.has('users/ama')).toBe(true);
+    });
+  });
+
+  it('answers 405 to other methods', async () => {
+    expect((await send('PUT', '/v1/admins/kofi', {}, 'efua')).status).toBe(405);
+    expect((await send('GET', '/v1/admins/kofi/deactivate', undefined, 'efua')).status).toBe(405);
+    expect((await send('GET', '/v1/admins/kofi/reactivate', undefined, 'efua')).status).toBe(405);
+    expect((await post('/v1/admins/kofi/promote', {}, 'efua')).status).toBe(404);
+  });
+});
+
+// NKB-203, NKB-209: a new password ends the account's other sign-ins at once.
+describe('sign-ins after a password reset', () => {
+  it('refuses a sign-in from before the reset', async () => {
+    const earlier = { auth_time: Math.floor(Date.now() / 1000) - 60 };
+    const me = () => send('GET', '/v1/me', undefined, 'ama', env, earlier);
+    expect((await me()).status).toBe(200);
+
+    await post('/v1/password/reset-link', { email: 'ama@example.com' }, null);
+    const reset = (log.mock.calls as [string, { text?: string }][])
+      .map(([, email]) => /http\S+reset-password\S+/.exec(email?.text ?? ''))
+      .find((match) => match !== null)!;
+    expect((await useLink(new URL(reset[0]), 'a new password', '/v1/password/reset')).status).toBe(
+      200,
+    );
+
+    expect((await me()).status).toBe(401);
+    expect((await send('GET', '/v1/me', undefined, 'ama')).status).toBe(200);
   });
 });

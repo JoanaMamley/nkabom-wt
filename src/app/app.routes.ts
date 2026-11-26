@@ -1,6 +1,7 @@
 import { Routes } from '@angular/router';
 
 import { AddAdminPage } from './admins/add-admin-page';
+import { AdminsPage } from './admins/admins-page';
 import { Access, defaultDeny } from './core/guards';
 import { HomePage } from './home/home-page';
 import { LoginPage } from './login/login-page';
@@ -73,8 +74,10 @@ export const routes: Routes = [
       },
       // Logged in.
       { path: 'home', component: HomePage, title: 'Nkabom' },
-      // A Primary Admin adds an admin (FR-1.6). The Worker refuses anyone else.
-      { path: 'admins', component: AddAdminPage, title: 'Add an admin · Nkabom' },
+      // A Primary Admin manages the admins (FR-1.6, FR-1.7) and adds them. The Worker refuses
+      // anyone else.
+      { path: 'admins', component: AdminsPage, title: 'Admins · Nkabom' },
+      { path: 'admins/new', component: AddAdminPage, title: 'Add an admin · Nkabom' },
     ],
   },
   // A mistyped or old address goes to login, which sends anyone logged in on to their home page.

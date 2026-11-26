@@ -1,0 +1,100 @@
+<section class="page">
+  <h1>Admins</h1>
+  @switch (state()) {
+    @case ('loading') {
+      <p>Loading…</p>
+    }
+    @case ('denied') {
+      <p>Only a Primary Admin can manage admins.</p>
+      <p><a routerLink="/home">Back to home</a></p>
+    }
+    @case ('error') {
+      <p>{{ loadError() }}</p>
+    }
+    @case ('ready') {
+      <p><a routerLink="/admins/new" class="button primary">Add an admin</a></p>
+
+      <!-- Always in the page, so screen readers announce what changes in them. -->
+      <p class="status" role="status">{{ done() }}</p>
+      <p class="form-error" role="alert">{{ error() }}</p>
+
+      <ul class="admins">
+        @for (admin of admins(); track admin.uid) {
+          <li>
+            <h2>
+              {{ label(admin) }}
+              @if (admin.self) {
+                <span class="muted">(you)</span>
+              }
+            </h2>
+            @if (admin.email) {
+              <p>{{ admin.email }}</p>
+            }
+            @if (admin.calendarEmail && admin.calendarEmail !== admin.email) {
+              <p class="muted">Calendar: {{ admin.calendarEmail }}</p>
+            }
+            <p>
+              {{ admin.role === 'primaryAdmin' ? 'Primary Admin' : 'Admin' }}
+              @if (admin.status === 'deactivated') {
+                · <strong>Deactivated</strong>
+              }
+            </p>
+
+            @if (!admin.self) {
+              <div class="admin-actions">
+                @if (admin.status === 'active') {
+                  @if (admin.role === 'admin') {
+                    <button
+                      type="button"
+                      [disabled]="busy() !== null"
+                      [attr.aria-label]="'Make ' + label(admin) + ' a Primary Admin'"
+                      (click)="setRole(admin, 'primaryAdmin')"
+                    >
+                      Make Primary Admin
+                    </button>
+                  } @else {
+                    <button
+                      type="button"
+                      [disabled]="busy() !== null"
+                      [attr.aria-label]="'Make ' + label(admin) + ' an admin'"
+                      (click)="setRole(admin, 'admin')"
+                    >
+                      Make admin
+                    </button>
+                  }
+                  <button
+                    type="button"
+                    [disabled]="busy() !== null"
+                    [attr.aria-label]="'Deactivate ' + label(admin)"
+                    (click)="deactivate(admin)"
+                  >
+                    Deactivate
+                  </button>
+                } @else {
+                  <button
+                    type="button"
+                    [disabled]="busy() !== null"
+                    [attr.aria-label]="'Reactivate ' + label(admin)"
+                    (click)="reactivate(admin)"
+                  >
+                    Reactivate
+                  </button>
+                }
+                <button
+                  type="button"
+                  [disabled]="busy() !== null"
+                  [attr.aria-label]="'Delete ' + label(admin)"
+                  (click)="remove(admin)"
+                >
+                  Delete
+                </button>
+              </div>
+            }
+          </li>
+        }
+      </ul>
+
+      <p><a routerLink="/home">Back to home</a></p>
+    }
+  }
+</section>

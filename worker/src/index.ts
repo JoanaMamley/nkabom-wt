@@ -1,4 +1,11 @@
-import { createAdmin } from './admins';
+import {
+  createAdmin,
+  deactivateAdmin,
+  deleteAdmin,
+  listAdmins,
+  reactivateAdmin,
+  setAdminRole,
+} from './admins';
 import { preflight, withCors } from './cors';
 import type { Env } from './env';
 import { sendEmail } from './email';
@@ -48,6 +55,11 @@ async function route(request: Request, env: Env): Promise<Response> {
   if (pathname.startsWith('/photos/')) {
     return servePhoto(request, env);
   }
+  const admin = /^\/v1\/admins\/([^/]+)(?:\/(deactivate|reactivate))?$/.exec(pathname);
+  if (admin) {
+    // User IDs are letters and digits only (FIREBASE_UID), so there is nothing to decode.
+    return manageAdmin(request, env, admin[1], admin[2]);
+  }
   switch (pathname) {
     case '/health':
       allow(request, 'GET');
@@ -80,7 +92,10 @@ async function route(request: Request, env: Env): Promise<Response> {
       allow(request, 'POST');
       return setFirstPassword(request, env);
     case '/v1/admins':
-      // FR-1.6: a Primary Admin creates an admin account.
+      // FR-1.6: a Primary Admin lists the admin accounts and creates them.
+      if (request.method === 'GET') {
+        return listAdmins(env, await requireAccount(request, env));
+      }
       allow(request, 'POST');
       return createAdmin(request, env, await requireAccount(request, env));
     case '/v1/registration':
@@ -101,6 +116,29 @@ async function route(request: Request, env: Env): Promise<Response> {
     default:
       throw new HttpError(404, 'Not found');
   }
+}
+
+// FR-1.6, FR-1.7: a Primary Admin changes another admin's role (PATCH), deactivates or
+// reactivates them (POST to .../deactivate or .../reactivate) or deletes them (DELETE), at
+// /v1/admins/{uid}.
+async function manageAdmin(
+  request: Request,
+  env: Env,
+  uid: string,
+  action: string | undefined,
+): Promise<Response> {
+  if (action) {
+    allow(request, 'POST');
+    const account = await requireAccount(request, env);
+    return action === 'deactivate'
+      ? deactivateAdmin(env, account, uid)
+      : reactivateAdmin(env, account, uid);
+  }
+  if (request.method === 'DELETE') {
+    return deleteAdmin(env, await requireAccount(request, env), uid);
+  }
+  allow(request, 'PATCH');
+  return setAdminRole(request, env, await requireAccount(request, env), uid);
 }
 
 // FR-4.14: an admin sends themselves a test email, which also checks the email set-up.

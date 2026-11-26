@@ -21,6 +21,11 @@ export interface AuthAccount {
   passwordUpdatedAt: number | null;
   /** The account's custom claims. */
   claims: Record<string, unknown>;
+  /**
+   * Sign-ins from before this time, in seconds since 1970, are revoked (NKB-209): Firebase moves
+   * it on when the password changes, and deactivating an admin moves it on too. Null if unset.
+   */
+  validSince: number | null;
 }
 
 /** The account with this user ID, or null if there is none. */
@@ -48,9 +53,51 @@ export async function createAccount(
   return localId;
 }
 
-/** Deletes the account, as when creating an admin fails part-way. */
+/**
+ * Deletes the account, as when creating an admin fails part-way or an admin is deleted (NKB-209).
+ * An account that is already gone counts as deleted, so a deletion that failed later on can be
+ * tried again.
+ */
 export async function deleteAccount(env: Env, uid: string): Promise<void> {
-  await post(env, ':delete', { localId: uid });
+  try {
+    await post(env, ':delete', { localId: uid });
+  } catch (error) {
+    if (!isUserNotFound(error)) {
+      throw error;
+    }
+  }
+}
+
+function isUserNotFound(error: unknown): boolean {
+  return error instanceof Error && error.message.includes('USER_NOT_FOUND');
+}
+
+/**
+ * Deactivates the account (FR-1.6, NKB-209): Firebase refuses its sign-ins and stops renewing their
+ * ID tokens, and moving validSince on revokes the sign-ins already in progress, which requireUser
+ * (auth.ts) then refuses at once. An account that is already gone cannot sign in either, so it
+ * counts as disabled, as when an admin's deletion stopped part-way.
+ */
+export async function disableAccount(env: Env, uid: string): Promise<void> {
+  try {
+    await post(env, ':update', {
+      localId: uid,
+      disableUser: true,
+      validSince: String(Math.floor(Date.now() / 1000)),
+    });
+  } catch (error) {
+    if (!isUserNotFound(error)) {
+      throw error;
+    }
+  }
+}
+
+/**
+ * Re-enables a deactivated account (NKB-209), which can then sign in again with its password. The
+ * sign-ins revoked when it was disabled stay revoked, as validSince does not move back.
+ */
+export async function enableAccount(env: Env, uid: string): Promise<void> {
+  await post(env, ':update', { localId: uid, disableUser: false });
 }
 
 /** Marks the account's email address as verified (FR-1.2). */
@@ -99,6 +146,8 @@ function firstAccount(response: unknown): AuthAccount | null {
         disabled?: boolean;
         passwordUpdatedAt?: number;
         customAttributes?: string;
+        /** Seconds since 1970, as a string. */
+        validSince?: string;
       }[];
     }
   ).users?.[0];
@@ -110,6 +159,7 @@ function firstAccount(response: unknown): AuthAccount | null {
         disabled: user.disabled === true,
         passwordUpdatedAt: user.passwordUpdatedAt ?? null,
         claims: parseClaims(user.customAttributes),
+        validSince: user.validSince ? Number(user.validSince) : null,
       }
     : null;
 }

@@ -268,6 +268,24 @@ describe('role-based access', () => {
     await assertFails(getDoc(doc(as('efua', { role: 'primaryAdmin' }), USERS, 'ama')));
   });
 
+  it.each(roles)('denies a deactivated %s every admin read at once (NKB-209)', async (role) => {
+    const uid = role === 'admin' ? 'efua' : 'kojo';
+    await seed(`${USERS}/${uid}`, { role, email: `${uid}@example.com`, status: 'deactivated' });
+    const db = as(uid, { role });
+
+    await assertFails(getDoc(doc(db, USERS, 'ama')));
+    await assertFails(getDocs(collection(db, USERS)));
+    await assertFails(getDoc(doc(db, MEMBERS, 'ama')));
+    await assertFails(getDocs(collection(db, MEMBERS)));
+    await assertFails(getDoc(doc(db, DIRECTORY, 'kofi')));
+  });
+
+  it('lets an admin whose record says active read as before', async () => {
+    await seed(`${USERS}/efua`, { role: 'admin', email: 'efua@example.com', status: 'active' });
+
+    await assertSucceeds(getDoc(doc(as('efua', { role: 'admin' }), MEMBERS, 'ama')));
+  });
+
   it('denies an admin record without the claim, or with an unverified email', async () => {
     await assertFails(getDoc(doc(as('efua'), MEMBERS, 'ama')));
     const unverified = env
