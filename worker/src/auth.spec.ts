@@ -37,14 +37,16 @@ function mockAuthEmulator(...uids: string[]) {
 
 describe('verifyIdToken', () => {
   it('accepts a token signed by Google for this project', async () => {
-    const token = await signToken(google.privateKey, 'google-1', claims());
+    // One set of claims, so the expected sign-in time cannot be a second later than the token's.
+    const payload = claims();
+    const token = await signToken(google.privateKey, 'google-1', payload);
 
     await expect(verifyIdToken(token, stagingEnv(), keys)).resolves.toEqual({
       uid: 'ama',
       name: null,
       email: 'ama@example.com',
       emailVerified: true,
-      authTime: claims().auth_time,
+      authTime: payload.auth_time,
       roleClaim: null,
       signInProvider: 'password',
     });

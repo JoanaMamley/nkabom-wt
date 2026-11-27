@@ -7,7 +7,7 @@ import { Accounts } from '../core/accounts';
 import { ApiError } from '../core/api';
 import { authErrorMessage } from '../core/messages';
 import { Session } from '../core/session';
-import { GoogleSignIn } from '../google-sign-in/google-sign-in';
+import { SocialSignIn } from '../social-sign-in/social-sign-in';
 import { RevealPassword } from '../reveal-password/reveal-password';
 import { Verification } from '../sign-up/verification';
 
@@ -28,14 +28,14 @@ export function greeting(hour: number): string {
 }
 
 /**
- * Login with email and password or Google (FR-1.1), and the app's first page: / leads here. One of the
+ * Login with email and password, Google or Facebook (FR-1.1), and the app's first page: / leads here. One of the
  * three pages anyone can see without logging in (FR-1.12). An account whose email is not
  * verified goes to the check-email page (FR-1.2). After a session expires (FR-1.10, core/session.ts)
  * it opens saying so.
  */
 @Component({
   selector: 'app-login-page',
-  imports: [AuthLayout, GoogleSignIn, RevealPassword, ReactiveFormsModule, RouterLink],
+  imports: [AuthLayout, RevealPassword, ReactiveFormsModule, RouterLink, SocialSignIn],
   templateUrl: './login-page.html',
   styleUrl: './login-page.scss',
 })

@@ -2,7 +2,7 @@
   display: block;
 }
 
-// "or" between the email form and the Google button, on a line.
+// "or" between the email form and the Google and Facebook buttons, on a line.
 .divider {
   display: flex;
   gap: 0.75rem;
@@ -19,13 +19,17 @@
   }
 }
 
-// Google's branding asks for its mark on a plain light or dark button, so this is not the
+// Google's and Facebook's branding ask for their marks on a plain button, so these are not the
 // gradient primary button.
-.google {
+.provider {
   display: flex;
   gap: 0.75rem;
   align-items: center;
   justify-content: center;
   width: 100%;
   font-weight: 600;
+}
+
+.provider + .provider {
+  margin-top: 0.75rem;
 }
