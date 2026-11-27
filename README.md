@@ -289,7 +289,7 @@ Once per project, signed in as the shared account. Done on both projects (Novemb
 
 ### Setting up Facebook login
 
-Once per project, in a Meta developer app of its own (`Nkabom Staging` for `nkabom-staging`, `Nkabom` for `nkabom-prod`). Meta allows Facebook accounts only for real people, so there is no shared Facebook account: the developer's own account creates the apps, and a second trusted person is added as an app admin (**App roles > Roles**) so the apps do not depend on one person. Meta's dashboard changes often, so the labels below may differ a little. Done on both projects up to step 5 (November 2026); neither app is published yet (step 6), and Facebook login is still to check on staging.
+Once per project, in a Meta developer app of its own (`Nkabom Staging` for `nkabom-staging`, `Nkabom` for `nkabom-prod`). Meta allows Facebook accounts only for real people, so there is no shared Facebook account: the developer's own account creates the apps, and a second trusted person is added as an app admin (**App roles > Roles**) so the apps do not depend on one person. Meta's dashboard changes often, so the labels below may differ a little. Done on both projects up to step 5 (November 2026); neither app is published yet (step 6). A Facebook sign-up is still to test once they are (see NKB-211 in the backlog).
 
 1. **Create the Meta app.** Sign in to [developers.facebook.com](https://developers.facebook.com) with your Facebook account and register as a developer if asked (free). **My Apps > Create app**, which goes through five screens:
    - **App details:** the app name, and the shared account's address as the contact email.
