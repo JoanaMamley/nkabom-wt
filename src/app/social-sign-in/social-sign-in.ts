@@ -18,7 +18,7 @@ import { Session } from '../core/session';
 
 /**
  * The Firebase projects whose Meta app lets members log in with Facebook (NKB-211). Until a
- * project's Meta app is published, which waits for the constitution (README, Setting up Facebook
+ * project's Meta app is published, which waits for the terms page (NKB-212; README, Setting up Facebook
  * login), only people with a role on it can, so production is left out and the button says so
  * instead. Add nkabom-prod here once its Meta app is published.
  */
@@ -42,7 +42,7 @@ function socialErrors(provider: SocialProvider): Record<string, string> {
   return {
     'auth/popup-blocked': `Your browser blocked the ${name} window. Allow pop-ups for this site and try again.`,
     // Another account already uses the address: email and password, or the other provider.
-    // Linking them is NKB-212.
+    // Linking them is NKB-213.
     'auth/account-exists-with-different-credential':
       'This email address already has a Nkabom account. Log in the way you did before.',
     'auth/user-disabled': 'This account has been turned off. Please contact the executives.',
