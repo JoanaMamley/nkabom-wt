@@ -6,6 +6,7 @@ import { Accounts } from '../core/accounts';
 import { ApiError } from '../core/api';
 import { SESSION_EXPIRED, Session } from '../core/session';
 import { Theme } from '../core/theme';
+import { PendingGoogleLink } from '../google-sign-in/pending-google-link';
 import { Verification } from '../sign-up/verification';
 import { greeting, LoginPage } from './login-page';
 
@@ -23,6 +24,7 @@ describe('LoginPage', () => {
     signOut: vi.fn(),
     logInWithGoogle: vi.fn(),
     googleRedirectResult: vi.fn(),
+    linkGoogle: vi.fn(),
   };
   const session = { start: vi.fn(), expiredMessage: signal<string | null>(null) };
   const verification = { sendError: signal<string | null>(null) };
@@ -32,6 +34,7 @@ describe('LoginPage', () => {
     accounts.logIn.mockReset().mockResolvedValue({ emailVerified: true });
     accounts.signOut.mockReset().mockResolvedValue(undefined);
     accounts.googleRedirectResult.mockReset().mockResolvedValue(null);
+    accounts.linkGoogle.mockReset().mockResolvedValue(undefined);
     session.start.mockReset().mockResolvedValue({ uid: 'ama', role: 'member' });
     session.expiredMessage.set(null);
     TestBed.configureTestingModule({
@@ -187,5 +190,97 @@ describe('LoginPage', () => {
     await TestBed.inject(ApplicationRef).whenStable();
 
     expect(accounts.logInWithGoogle.mock.calls).toEqual([[false], [true]]);
+  });
+
+  // NKB-213: after a Google login with the address of an email and password account.
+  describe('adding a waiting Google sign-in (FR-1.3)', () => {
+    const credential = { idToken: 'google' };
+    const user = { emailVerified: true, email: 'Ama@Example.com' };
+
+    function waiting(emailVerified = true) {
+      TestBed.inject(PendingGoogleLink).link.set({
+        email: 'ama@example.com',
+        emailVerified,
+        credential: credential as never,
+      });
+    }
+
+    beforeEach(() => {
+      accounts.logIn.mockResolvedValue(user);
+    });
+
+    it('asks for the password, with the address filled in', async () => {
+      waiting();
+      const { page } = await render();
+
+      expect(page.querySelector('[role="status"]')?.textContent).toContain(
+        'Google will be added to it',
+      );
+      expect(page.querySelector<HTMLInputElement>('#email')!.value).toBe('ama@example.com');
+    });
+
+    it("adds Google to a member's account once they log in", async () => {
+      waiting();
+      const { logIn } = await render();
+
+      await logIn('ama@example.com', 'correct horse');
+
+      expect(accounts.linkGoogle).toHaveBeenCalledWith(user, credential);
+      expect(navigate).toHaveBeenCalledWith('/home');
+      expect(TestBed.inject(PendingGoogleLink).link()).toBeNull();
+    });
+
+    it("never adds Google to an admin's account (FR-1.9)", async () => {
+      waiting();
+      session.start.mockResolvedValue({ uid: 'kofi', role: 'admin' });
+      const { logIn } = await render();
+
+      await logIn('ama@example.com', 'correct horse');
+
+      expect(accounts.linkGoogle).not.toHaveBeenCalled();
+      expect(navigate).toHaveBeenCalledWith('/home');
+    });
+
+    it('never links an address Google does not say is verified', async () => {
+      waiting(false);
+      const { logIn } = await render();
+
+      await logIn('ama@example.com', 'correct horse');
+
+      expect(accounts.linkGoogle).not.toHaveBeenCalled();
+    });
+
+    it('never links to an account with another address', async () => {
+      waiting();
+      accounts.logIn.mockResolvedValue({ emailVerified: true, email: 'abena@example.com' });
+      const { logIn } = await render();
+
+      await logIn('abena@example.com', 'correct horse');
+
+      expect(accounts.linkGoogle).not.toHaveBeenCalled();
+    });
+
+    it('never links to an account whose address is not verified', async () => {
+      waiting();
+      accounts.logIn.mockResolvedValue({ emailVerified: false, email: 'ama@example.com' });
+      const { logIn } = await render();
+
+      await logIn('ama@example.com', 'correct horse');
+
+      expect(accounts.linkGoogle).not.toHaveBeenCalled();
+      expect(navigate).toHaveBeenCalledWith('/check-email');
+      expect(TestBed.inject(PendingGoogleLink).link()).toBeNull();
+    });
+
+    it('still logs the member in when linking fails', async () => {
+      waiting();
+      accounts.linkGoogle.mockRejectedValue({ code: 'auth/credential-already-in-use' });
+      vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+      const { logIn } = await render();
+
+      await logIn('ama@example.com', 'correct horse');
+
+      expect(navigate).toHaveBeenCalledWith('/home');
+    });
   });
 });

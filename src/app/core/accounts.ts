@@ -5,6 +5,8 @@ import {
   createUserWithEmailAndPassword,
   getRedirectResult,
   GoogleAuthProvider,
+  linkWithCredential,
+  type OAuthCredential,
   setPersistence,
   signInWithEmailAndPassword,
   signInWithPopup,
@@ -13,7 +15,17 @@ import {
   type User,
 } from 'firebase/auth';
 
+import type { FirebaseError } from 'firebase/app';
+
 import { FIREBASE_AUTH } from './firebase';
+
+/** A Google sign-in waiting to be added to the email and password account with its address. */
+export interface GoogleLink {
+  email: string;
+  /** Whether Google says the address is verified. Only a verified one is linked (FR-1.3). */
+  emailVerified: boolean;
+  credential: OAuthCredential;
+}
 
 /** The Firebase Auth calls pages make, in one place so their tests can replace them. */
 @Injectable({ providedIn: 'root' })
@@ -74,8 +86,46 @@ export class Accounts {
     return (await getRedirectResult(this.auth))?.user ?? null;
   }
 
+  /**
+   * The Google sign-in Firebase refused with auth/account-exists-with-different-credential, because
+   * an email and password account already uses the address (NKB-213), or null if the error is
+   * not that or lacks what linking needs. emailVerified is what Google's ID token says.
+   */
+  pendingGoogleLink(error: unknown): GoogleLink | null {
+    if (
+      (error as { code?: string } | null)?.code !== 'auth/account-exists-with-different-credential'
+    ) {
+      return null;
+    }
+    const credential = GoogleAuthProvider.credentialFromError(error as FirebaseError);
+    const email = (error as FirebaseError).customData?.['email'];
+    if (!credential || typeof email !== 'string') {
+      return null;
+    }
+    return { email, emailVerified: googleEmailVerified(credential.idToken), credential };
+  }
+
+  /** Adds the Google sign-in to the account (NKB-213), so the member can use either. */
+  async linkGoogle(user: User, credential: OAuthCredential): Promise<void> {
+    await linkWithCredential(user, credential);
+  }
+
   signOut(): Promise<void> {
     return signOut(this.auth);
+  }
+}
+
+/** The email_verified claim of a Google ID token, false if it is missing or unreadable. */
+export function googleEmailVerified(idToken: string | undefined): boolean {
+  try {
+    const payload = idToken?.split('.')[1];
+    if (!payload) {
+      return false;
+    }
+    const json = atob(payload.replace(/-/g, '+').replace(/_/g, '/'));
+    return (JSON.parse(json) as { email_verified?: unknown }).email_verified === true;
+  } catch {
+    return false;
   }
 }
 

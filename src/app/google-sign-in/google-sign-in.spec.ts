@@ -5,9 +5,15 @@ import { Accounts } from '../core/accounts';
 import { ApiError } from '../core/api';
 import { Session } from '../core/session';
 import { GoogleSignIn } from './google-sign-in';
+import { PendingGoogleLink } from './pending-google-link';
 
 describe('GoogleSignIn', () => {
-  const accounts = { logInWithGoogle: vi.fn(), googleRedirectResult: vi.fn(), signOut: vi.fn() };
+  const accounts = {
+    logInWithGoogle: vi.fn(),
+    googleRedirectResult: vi.fn(),
+    signOut: vi.fn(),
+    pendingGoogleLink: vi.fn(),
+  };
   const session = { start: vi.fn() };
   let navigate: ReturnType<typeof vi.spyOn>;
 
@@ -15,6 +21,7 @@ describe('GoogleSignIn', () => {
     accounts.logInWithGoogle.mockReset().mockResolvedValue({ uid: 'ama', emailVerified: true });
     accounts.googleRedirectResult.mockReset().mockResolvedValue(null);
     accounts.signOut.mockReset().mockResolvedValue(undefined);
+    accounts.pendingGoogleLink.mockReset().mockReturnValue(null);
     session.start.mockReset().mockResolvedValue({ uid: 'ama', role: 'member' });
     TestBed.configureTestingModule({
       imports: [GoogleSignIn],
@@ -118,5 +125,39 @@ describe('GoogleSignIn', () => {
     await click();
 
     expect(element.querySelector('[role="alert"]')?.textContent).toContain(message);
+  });
+
+  // NKB-213: an address that already has an email and password account.
+  describe('linking to an existing account (FR-1.3)', () => {
+    const exists = { code: 'auth/account-exists-with-different-credential' };
+    const link = { email: 'ama@example.com', emailVerified: true, credential: { idToken: 'x' } };
+
+    it('keeps a verified Google sign-in and goes to log in with the password', async () => {
+      accounts.logInWithGoogle.mockRejectedValue(exists);
+      accounts.pendingGoogleLink.mockReturnValue(link);
+      const { element, button, click } = await render();
+
+      await click();
+
+      expect(accounts.pendingGoogleLink).toHaveBeenCalledWith(exists);
+      expect(TestBed.inject(PendingGoogleLink).link()).toBe(link);
+      expect(navigate).toHaveBeenCalledWith('/login');
+      expect(element.querySelector('[role="alert"]')).toBeNull();
+      expect(button.disabled).toBe(false);
+    });
+
+    it('never keeps one whose address Google does not say is verified', async () => {
+      accounts.logInWithGoogle.mockRejectedValue(exists);
+      accounts.pendingGoogleLink.mockReturnValue({ ...link, emailVerified: false });
+      const { element, click } = await render();
+
+      await click();
+
+      expect(TestBed.inject(PendingGoogleLink).link()).toBeNull();
+      expect(navigate).not.toHaveBeenCalled();
+      expect(element.querySelector('[role="alert"]')?.textContent).toContain(
+        'Log in with your email address and password',
+      );
+    });
   });
 });

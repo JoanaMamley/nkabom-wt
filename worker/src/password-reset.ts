@@ -11,7 +11,8 @@ import {
 import { getDocument } from './firestore';
 import { HttpError, json, readJson } from './http';
 import { signLink, verifyLink } from './links';
-import { MEMBERS, PASSWORD_RESETS } from './model';
+import { MEMBERS, PASSWORD_RESETS, USERS } from './model';
+import { ADMIN_ROLES } from './roles';
 
 // Password reset (FR-1.4, NKB-203) and a new admin's first password (FR-1.8, NKB-208). Like email
 // verification (verification.ts), the Worker sends its own signed link with a template from
@@ -46,9 +47,7 @@ export async function sendPasswordResetEmail(
   }
 
   const account = await lookupAccountByEmail(env, email.trim());
-  // An account without a password signs in another way, such as with Google, and has nothing to
-  // reset. A disabled account cannot log in whatever its password.
-  if (!account?.email || account.passwordUpdatedAt === null || account.disabled) {
+  if (!account?.email || account.disabled || !(await canSetPassword(env, account))) {
     return json({ requested: true });
   }
   // The first name from the member's profile, for the greeting. An account that has not registered
@@ -128,7 +127,7 @@ async function usePasswordLink(
   }
 
   const account = await lookupAccount(env, uid);
-  if (!account?.email || account.passwordUpdatedAt === null || account.disabled) {
+  if (!account?.email || account.disabled || !(await canSetPassword(env, account))) {
     throw invalid;
   }
   if (!(await verifyLink(env, linkParts(kind, account, expires), sig))) {
@@ -146,6 +145,22 @@ async function usePasswordLink(
 
   await setPassword(env, uid, password);
   return json({ reset: true });
+}
+
+/**
+ * Whether the account, enabled and with an address, may be sent a link to set its password. A
+ * disabled account cannot log in whatever its password. A member's account without a password
+ * signs in another way, such as with Google, and has nothing to reset. An admin's may have lost
+ * its password to a Google login with a @gmail.com address (NKB-213), and setting one is how they
+ * get their login back, so theirs is allowed. Such a link still works once: setting the password
+ * changes passwordUpdatedAt from none to a time, which the signature covers.
+ */
+async function canSetPassword(env: Env, account: AuthAccount): Promise<boolean> {
+  if (account.passwordUpdatedAt !== null) {
+    return true;
+  }
+  const user = await getDocument(env, `${USERS}/${account.uid}`);
+  return ADMIN_ROLES.includes(String(user?.['role']));
 }
 
 // What the link's signature covers. Its kind first, so one kind never works as the other. The

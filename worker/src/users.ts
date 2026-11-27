@@ -8,7 +8,7 @@ import {
   WriteBatch,
   type Fields,
 } from './firestore';
-import { setRoleClaim } from './firebase-auth';
+import { removeSignInProvider, setRoleClaim } from './firebase-auth';
 import { HttpError } from './http';
 import { ADMIN_ROLES } from './roles';
 import { ROLES, USERS, type Role } from './model';
@@ -43,13 +43,38 @@ export async function requireAccount(request: Request, env: Env): Promise<Accoun
     throw new HttpError(401, 'This account has been deactivated');
   }
   // FR-1.9: admins log in with email and password only, so an admin signed in another way, such
-  // as with Google once members can (NKB-210), gets nothing. The rules check the same.
+  // as with Google (NKB-210), gets nothing. The rules check the same.
   if (ADMIN_ROLES.includes(role) && user.signInProvider !== 'password') {
-    throw new HttpError(403, 'Admins log in with email and password');
+    await undoAdminSignIn(env, user);
+    throw new HttpError(403, ADMIN_PASSWORD_ONLY);
   }
   const session = await touchSession(env, user, role);
   await syncRoleClaim(env, user, role);
   return { ...user, role, session };
+}
+
+/** The refusal for an admin who signed in another way than with their password (FR-1.9). */
+export const ADMIN_PASSWORD_ONLY =
+  'Admins log in with email and password. Log in with your password, or use "Forgot password?" if it is not accepted.';
+
+// For @gmail.com addresses Firebase has already added Google to the admin's account by the time
+// the Worker sees the sign-in, and may have taken the password off (NKB-213). Taking Google off
+// again and revoking the sign-in (and with it the admin's other sign-ins) leaves the account as
+// it was, or, if the password went, with "Forgot password?" to set one (password-reset.ts). A failure is logged, not raised: the refusal matters more,
+// and the admin can still set a password.
+async function undoAdminSignIn(env: Env, user: User): Promise<void> {
+  if (!user.signInProvider) {
+    return;
+  }
+  try {
+    await removeSignInProvider(env, user.uid, user.signInProvider);
+  } catch (error) {
+    console.error('Admin sign-in not undone', {
+      uid: user.uid,
+      provider: user.signInProvider,
+      error: String(error),
+    });
+  }
 }
 
 // The Firestore rules read the role from the token (NKB-204), so when the token's claim differs

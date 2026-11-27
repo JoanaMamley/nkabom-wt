@@ -93,6 +93,22 @@ export async function disableAccount(env: Env, uid: string): Promise<void> {
 }
 
 /**
+ * Undoes a social login on an admin's account and ends the sign-in (FR-1.9, NKB-213). Firebase
+ * treats Google as the owner of @gmail.com addresses, so a Google login with an admin's address
+ * signs in to the admin's account and adds Google to it, before the Worker sees anything. This
+ * takes the provider off again and moves validSince on, so that sign-in is refused from now on
+ * (requireUser, auth.ts). Setting a password (Forgot password?) adds the password sign-in back
+ * if Firebase removed it.
+ */
+export async function removeSignInProvider(env: Env, uid: string, provider: string): Promise<void> {
+  await post(env, ':update', {
+    localId: uid,
+    deleteProvider: [provider],
+    validSince: String(Math.floor(Date.now() / 1000)),
+  });
+}
+
+/**
  * Re-enables a deactivated account (NKB-209), which can then sign in again with its password. The
  * sign-ins revoked when it was disabled stay revoked, as validSince does not move back.
  */
