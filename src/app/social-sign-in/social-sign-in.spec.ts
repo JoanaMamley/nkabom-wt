@@ -4,7 +4,7 @@ import { provideRouter, Router } from '@angular/router';
 import { Accounts } from '../core/accounts';
 import { ApiError } from '../core/api';
 import { Session } from '../core/session';
-import { SocialSignIn } from './social-sign-in';
+import { FACEBOOK_LOGIN, SocialSignIn } from './social-sign-in';
 
 /** A signed-in Firebase user, with the calls refreshSignIn makes. */
 function user(emailVerified: boolean) {
@@ -29,8 +29,11 @@ describe('SocialSignIn', () => {
   };
   const session = { start: vi.fn() };
   let navigate: ReturnType<typeof vi.spyOn>;
+  /** Whether this project's Meta app is published. */
+  let facebookLogin: boolean;
 
   beforeEach(() => {
+    facebookLogin = true;
     accounts.logInWith.mockReset().mockResolvedValue(user(true));
     accounts.pendingRedirect.mockReset().mockReturnValue(null);
     accounts.socialRedirectResult.mockReset().mockResolvedValue(null);
@@ -42,6 +45,7 @@ describe('SocialSignIn', () => {
         provideRouter([]),
         { provide: Accounts, useValue: accounts },
         { provide: Session, useValue: session },
+        { provide: FACEBOOK_LOGIN, useFactory: () => facebookLogin },
       ],
     });
     navigate = vi.spyOn(TestBed.inject(Router), 'navigateByUrl').mockResolvedValue(true);
@@ -178,6 +182,21 @@ describe('SocialSignIn', () => {
     expect(accounts.signOut).toHaveBeenCalled();
     expect(alert()).toContain('could not be reached');
     expect(navigate).not.toHaveBeenCalled();
+  });
+
+  it('says Facebook login is not available yet where its Meta app is not published', async () => {
+    facebookLogin = false;
+    const { click, alert, button } = await render();
+
+    await click('Facebook');
+
+    expect(alert()).toContain('Facebook login is not available yet');
+    expect(accounts.logInWith).not.toHaveBeenCalled();
+    expect(button('Facebook').disabled).toBe(false);
+
+    await click('Google');
+
+    expect(accounts.logInWith).toHaveBeenCalledWith('google', true);
   });
 
   it('says nothing when the provider’s window is closed', async () => {

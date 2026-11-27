@@ -1,11 +1,38 @@
-import { Component, inject, input, OnInit, PendingTasks, signal } from '@angular/core';
+import {
+  Component,
+  inject,
+  InjectionToken,
+  input,
+  OnInit,
+  PendingTasks,
+  signal,
+} from '@angular/core';
 import { Router } from '@angular/router';
 import type { User } from 'firebase/auth';
 
+import { environment } from '../../environments/environment';
 import { Accounts, refreshSignIn, type SocialProvider } from '../core/accounts';
 import { ApiError } from '../core/api';
 import { authErrorMessage } from '../core/messages';
 import { Session } from '../core/session';
+
+/**
+ * The Firebase projects whose Meta app lets members log in with Facebook (NKB-211). Until a
+ * project's Meta app is published, which waits for the constitution (README, Setting up Facebook
+ * login), only people with a role on it can, so production is left out and the button says so
+ * instead. Add nkabom-prod here once its Meta app is published.
+ */
+const FACEBOOK_LOGIN_PROJECTS = ['demo-nkabom', 'nkabom-staging'];
+
+/** Whether Facebook login is open in this build. */
+export const FACEBOOK_LOGIN = new InjectionToken<boolean>('FACEBOOK_LOGIN', {
+  providedIn: 'root',
+  factory: () => FACEBOOK_LOGIN_PROJECTS.includes(environment.firebase.projectId ?? ''),
+});
+
+/** What the Facebook button says while Facebook login is not open. */
+export const FACEBOOK_NOT_READY =
+  'Facebook login is not available yet. Please continue with Google or your email address for now.';
 
 const PROVIDER_NAMES: Record<SocialProvider, string> = { google: 'Google', facebook: 'Facebook' };
 
@@ -43,6 +70,7 @@ export class SocialSignIn implements OnInit {
   private readonly session = inject(Session);
   private readonly router = inject(Router);
   private readonly pendingTasks = inject(PendingTasks);
+  private readonly facebookLogin = inject(FACEBOOK_LOGIN);
 
   /** Whether the sign-in outlives the browser: the login page's "Remember me". */
   readonly remember = input(true);
@@ -63,6 +91,10 @@ export class SocialSignIn implements OnInit {
   }
 
   protected continue(provider: SocialProvider): Promise<void> {
+    if (provider === 'facebook' && !this.facebookLogin) {
+      this.error.set(FACEBOOK_NOT_READY);
+      return Promise.resolve();
+    }
     return this.finish(provider, () => this.accounts.logInWith(provider, this.remember()));
   }
 
