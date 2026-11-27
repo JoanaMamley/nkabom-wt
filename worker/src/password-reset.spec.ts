@@ -137,6 +137,20 @@ describe('sendPasswordResetEmail', () => {
     expect(sentLinks()).toEqual([]);
   });
 
+  // NKB-213: a Google login with an admin's @gmail.com address may take their password off.
+  it('emails an admin whose account has lost its password a link that sets one, once', async () => {
+    accounts.set('kofi', { email: 'kofi@example.com', emailVerified: true });
+    firestore.docs.set('users/kofi', { role: 'admin', email: 'kofi@example.com' });
+
+    await askForLink('kofi@example.com');
+    const [sent] = sentLinks();
+    expect(sent.searchParams.get('uid')).toBe('kofi');
+
+    expect(await (await reset(sent, 'new password')).json()).toEqual({ reset: true });
+    expect(accounts.get('kofi')!.password).toBe('new password');
+    expect((await errorOf(reset(sent, 'another password')))?.status).toBe(400);
+  });
+
   it('refuses something that is not an email address', async () => {
     for (const email of ['', 'ama', 'ama@', 'a b@example.com']) {
       expect(await errorOf(askForLink(email))).toEqual({

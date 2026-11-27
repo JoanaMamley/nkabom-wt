@@ -6,7 +6,12 @@
 
   <h1><span class="accent">Log in</span> to your account</h1>
 
-  @if (expired && !error()) {
+  @if (googleLink() && !error()) {
+    <p class="form-notice" role="status">
+      This email address already has a Nkabom account. Log in with your password, and Google will be
+      added to it, so you can use either next time.
+    </p>
+  } @else if (expired && !error()) {
     <p class="form-notice" role="status">{{ expired }}</p>
   }
 

@@ -1,6 +1,7 @@
-import { Component, inject, signal } from '@angular/core';
+import { Component, effect, inject, signal } from '@angular/core';
 import { NonNullableFormBuilder, ReactiveFormsModule, Validators } from '@angular/forms';
 import { Router, RouterLink } from '@angular/router';
+import type { User } from 'firebase/auth';
 
 import { AuthLayout } from '../auth-layout/auth-layout';
 import { Accounts } from '../core/accounts';
@@ -8,6 +9,7 @@ import { ApiError } from '../core/api';
 import { authErrorMessage } from '../core/messages';
 import { Session } from '../core/session';
 import { GoogleSignIn } from '../google-sign-in/google-sign-in';
+import { PendingGoogleLink } from '../google-sign-in/pending-google-link';
 import { RevealPassword } from '../reveal-password/reveal-password';
 import { Verification } from '../sign-up/verification';
 
@@ -31,7 +33,9 @@ export function greeting(hour: number): string {
  * Login with email and password or Google (FR-1.1), and the app's first page: / leads
  * here. One of the four pages anyone can see without logging in (FR-1.12). An account whose email
  * is not verified goes to the check-email page (FR-1.2). After a session expires (FR-1.10,
- * core/session.ts) it opens saying so.
+ * core/session.ts) it opens saying so. After a Google login with the address of an email and
+ * password account (GoogleSignIn), it asks for the password and then adds Google to the account
+ * (FR-1.3, NKB-213).
  */
 @Component({
   selector: 'app-login-page',
@@ -44,6 +48,7 @@ export class LoginPage {
   private readonly session = inject(Session);
   private readonly router = inject(Router);
   private readonly verification = inject(Verification);
+  private readonly pendingLink = inject(PendingGoogleLink);
 
   protected readonly greeting = greeting(new Date().getHours());
   protected readonly form = inject(NonNullableFormBuilder).group({
@@ -54,11 +59,20 @@ export class LoginPage {
   protected readonly submitted = signal(false);
   protected readonly busy = signal(false);
   protected readonly error = signal<string | null>(null);
+  /** The Google sign-in waiting for this login, to add to the account (NKB-213). */
+  protected readonly googleLink = this.pendingLink.link.asReadonly();
   /** Read once: the message goes when the page does. */
   protected readonly expired = this.session.expiredMessage();
 
   constructor() {
     this.session.expiredMessage.set(null);
+    // The address is the one Google gave, so fill it in.
+    effect(() => {
+      const link = this.googleLink();
+      if (link) {
+        this.form.controls.email.setValue(link.email);
+      }
+    });
   }
 
   protected async submit(): Promise<void> {
@@ -73,13 +87,16 @@ export class LoginPage {
     try {
       const user = await this.accounts.logIn(email.trim(), password, remember);
       if (!user.emailVerified) {
-        // No email was sent this time, so an error from an earlier send must not show.
+        // No email was sent this time, so an error from an earlier send must not show. An
+        // unverified account is never linked to Google.
         this.verification.sendError.set(null);
+        this.pendingLink.link.set(null);
         await this.router.navigateByUrl('/check-email');
         return;
       }
       // Creates the users record on a first login and starts the session (README, Worker).
-      await this.session.start();
+      const me = await this.session.start();
+      await this.linkGoogle(user, me.role);
       await this.router.navigateByUrl('/home');
     } catch (error) {
       if (error instanceof ApiError) {
@@ -91,6 +108,26 @@ export class LoginPage {
         this.error.set(authErrorMessage(error, LOGIN_ERRORS));
       }
       this.busy.set(false);
+    }
+  }
+
+  // NKB-213: adds the waiting Google sign-in to the account just logged in to, only for a member
+  // whose address is the one Google gave. Admins log in with their password only (FR-1.9), so
+  // Google is never added to theirs. Linking failing, as when that Google account already belongs
+  // to another Nkabom account, does not undo the login: the member can still use their password.
+  private async linkGoogle(user: User, role: string): Promise<void> {
+    const link = this.pendingLink.take();
+    if (
+      !link?.emailVerified ||
+      role !== 'member' ||
+      link.email.toLowerCase() !== user.email?.toLowerCase()
+    ) {
+      return;
+    }
+    try {
+      await this.accounts.linkGoogle(user, link.credential);
+    } catch (error) {
+      console.warn('Google not added to the account', error);
     }
   }
 

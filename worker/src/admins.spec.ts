@@ -5,6 +5,7 @@ import type { Env } from './env';
 import { FakeFirestore } from './fake-firestore';
 import worker from './index';
 import { MIN_PASSWORD_LENGTH, SET_PASSWORD_LINK_HOURS } from './password-reset';
+import { ADMIN_PASSWORD_ONLY } from './users';
 import { emulatorEnv, signedIn } from './test-helpers';
 
 const env = emulatorEnv({ PHOTO_LINK_KEY: 'test-link-key', EMAIL_PROVIDER: 'log' });
@@ -332,13 +333,64 @@ describe('admin sign-in methods (FR-1.9)', () => {
     for (const uid of ['efua', 'kofi']) {
       const response = await me(uid, 'google.com');
       expect(response.status).toBe(403);
-      expect(await response.json()).toEqual({ error: 'Admins log in with email and password' });
+      expect(await response.json()).toEqual({ error: ADMIN_PASSWORD_ONLY });
       expect((await me(uid, 'password')).status).toBe(200);
     }
   });
 
-  it('lets a member sign in another way', async () => {
+  // NKB-213: for @gmail.com addresses Firebase adds Google to the admin's account before the
+  // Worker sees the sign-in, so the refusal takes it off again and revokes that sign-in.
+  it("takes Google off an admin's account and ends that sign-in", async () => {
+    const google = signedIn('kofi', { firebase: { sign_in_provider: 'google.com' } });
+    const call = () =>
+      worker.fetch(
+        new Request('https://api.test/v1/me', { headers: google }) as Request<
+          unknown,
+          IncomingRequestCfProperties
+        >,
+        env,
+      );
+    vi.useFakeTimers({ now: Date.now() + 1000, toFake: ['Date'] });
+    try {
+      expect((await call()).status).toBe(403);
+    } finally {
+      vi.useRealTimers();
+    }
+    const update = vi
+      .mocked(fetch)
+      .mock.calls.map(
+        ([, init]) => JSON.parse(String(init?.body ?? '{}')) as Record<string, unknown>,
+      )
+      .find((body) => 'deleteProvider' in body);
+    expect(update).toMatchObject({ localId: 'kofi', deleteProvider: ['google.com'] });
+    // The same Google sign-in is now revoked, and Kofi can still log in with his password.
+    expect((await call()).status).toBe(401);
+    const later = signedIn('kofi', { auth_time: Math.floor(Date.now() / 1000) + 2 });
+    const password = await worker.fetch(
+      new Request('https://api.test/v1/me', { headers: later }) as Request<
+        unknown,
+        IncomingRequestCfProperties
+      >,
+      env,
+    );
+    expect(password.status).toBe(200);
+  });
+
+  it('still refuses the admin when undoing the sign-in fails', async () => {
+    const error = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+    const original = vi.mocked(fetch).getMockImplementation()!;
+    vi.mocked(fetch).mockImplementation(async (input, init) =>
+      String(init?.body ?? '').includes('deleteProvider')
+        ? new Response('nope', { status: 500 })
+        : original(input, init),
+    );
+    expect((await me('kofi', 'google.com')).status).toBe(403);
+    expect(error).toHaveBeenCalledWith('Admin sign-in not undone', expect.anything());
+  });
+
+  it('lets a member sign in another way, and leaves their account alone', async () => {
     expect((await me('ama', 'google.com')).status).toBe(200);
+    expect(accounts.get('ama')!.validSince).toBeUndefined();
   });
 });
 
