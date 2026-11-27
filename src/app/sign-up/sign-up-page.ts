@@ -5,7 +5,7 @@ import { Router, RouterLink } from '@angular/router';
 import { AuthLayout } from '../auth-layout/auth-layout';
 import { Accounts } from '../core/accounts';
 import { authErrorMessage, MIN_PASSWORD_LENGTH } from '../core/messages';
-import { SocialSignIn } from '../social-sign-in/social-sign-in';
+import { GoogleSignIn } from '../google-sign-in/google-sign-in';
 import { PrivacySummary } from '../privacy/privacy-summary';
 import { RevealPassword } from '../reveal-password/reveal-password';
 import { Verification } from './verification';
@@ -20,14 +20,13 @@ const SIGN_UP_ERRORS: Record<string, string> = {
  * Sign-up with email and password (NKB-202, FR-1.1, FR-1.2). One of the four pages anyone can see
  * without logging in (FR-1.12). Creates the Firebase account, has the Worker email a verification
  * link, then shows the check-email page. The account cannot log in until the address is verified.
- * Signing up with Google (NKB-210) or Facebook (NKB-211) needs no verification email, so it goes
- * straight in (SocialSignIn).
+ * Signing up with Google (NKB-210) needs no verification, so it goes straight in (GoogleSignIn).
  */
 @Component({
   selector: 'app-sign-up-page',
   imports: [
     AuthLayout,
-    SocialSignIn,
+    GoogleSignIn,
     RevealPassword,
     ReactiveFormsModule,
     PrivacySummary,

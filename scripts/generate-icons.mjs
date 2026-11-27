@@ -1,8 +1,7 @@
 // Renders the PWA icons and favicon with headless Chrome: the centre symbol of the WomenTrust
 // Graduate Association logo (public/icons/mark.svg, orange on transparent) on white. The symbol
 // is 60% of the icon's height, inside the central 80% circle, so the same image also works as a
-// maskable icon. meta-app-icon.png, the Meta app's icon for Facebook login (NKB-211), is the symbol
-// on transparent, which Meta asks for. A new logo needs only a new mark.svg. Run with npm run icons and commit the
+// maskable icon. A new logo needs only a new mark.svg. Run with npm run icons and commit the
 // results. Set CHROME to the Chrome binary if it is not in the default macOS location.
 import { execFileSync } from 'node:child_process';
 import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
@@ -22,12 +21,12 @@ const outputs = [
 
 const work = mkdtempSync(join(tmpdir(), 'nkabom-icons-'));
 
-// height: the symbol's share of the icon's height. transparent: no white background.
-function render(size, file, height = 0.6, transparent = false) {
+// height: the symbol's share of the icon's height.
+function render(size, file, height = 0.6) {
   const page = join(work, `${size}.html`);
   writeFileSync(
     page,
-    `<!doctype html><html><body style="margin:0;background:${transparent ? 'transparent' : '#fff'};display:grid;place-items:center;width:${size}px;height:${size}px">` +
+    `<!doctype html><html><body style="margin:0;background:#fff;display:grid;place-items:center;width:${size}px;height:${size}px">` +
       `<img style="display:block;height:${Math.round(size * height)}px" src="data:image/svg+xml;base64,${mark}">`,
   );
   execFileSync(
@@ -37,7 +36,6 @@ function render(size, file, height = 0.6, transparent = false) {
       '--disable-gpu',
       '--hide-scrollbars',
       '--force-device-scale-factor=1',
-      ...(transparent ? ['--default-background-color=00000000'] : []),
       `--window-size=${size},${size}`,
       `--screenshot=${file}`,
       `file://${page}`,
@@ -50,8 +48,6 @@ try {
   for (const [name, size] of outputs) {
     render(size, join(icons, name));
   }
-  // At the usual size, so it fits inside the round crop Meta's upload shows.
-  render(1024, join(icons, 'meta-app-icon.png'), 0.6, true);
 
   // favicon.ico holds one 32 px PNG, which every current browser reads.
   const png32 = join(work, 'favicon-32.png');

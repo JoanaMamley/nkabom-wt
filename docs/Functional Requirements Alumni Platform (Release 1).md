@@ -10,7 +10,7 @@ Functional requirements, Release 1. 17 October 2026.
 
 ## 1. Authentication and accounts
 
-- **FR-1.1** Members can register and log in with email and password, Google, or Facebook.
+- **FR-1.1** Members can register and log in with email and password, or Google. (Facebook was dropped in November 2026: Meta requires business verification and a data handling review before an app can be used by the public.)
 - **FR-1.2** Email sign-ups must verify the email address before the account is active.
 - **FR-1.3** Logging in with a social provider whose email matches an existing account links to that account instead of creating a duplicate.
 - **FR-1.4** Email/password accounts can reset their password via an emailed link.
@@ -21,7 +21,7 @@ Functional requirements, Release 1. 17 October 2026.
 - **FR-1.9** Admins log in with email and password only, not social login.
 - **FR-1.10** Sessions expire after inactivity, and admin sessions are shorter than member sessions.
 - **FR-1.11** Admin routes and APIs are enforced server-side, not only hidden in the UI.
-- **FR-1.12** Nothing on the site is visible before login except four pages: login, sign-up, the privacy notice, and the terms of service (added with NKB-212, since Meta and Google read the terms logged out before publishing social login). Every other page and API requires an authenticated session.
+- **FR-1.12** Nothing on the site is visible before login except four pages: login, sign-up, the privacy notice, and the terms of service (added with NKB-212, so anyone can read the terms before signing up). Every other page and API requires an authenticated session.
 - **FR-1.13** The privacy notice is linked from the login page, the sign-up page, and the site footer.
 - **FR-1.14** The privacy notice explains in plain language:
   - what data is collected (name, date of birth, occupation or course, graduation year, photo)
@@ -157,7 +157,7 @@ The constitution text is not yet in hand. These requirements cover how the platf
 ## 9. Technology stack
 
 - **Frontend:** Angular, built as an installable PWA (FR-4.10) and hosted on Firebase Hosting.
-- **Backend:** Firebase on the free Spark plan: Authentication (email, Google, and Facebook), Firestore, and Cloud Messaging (push). Server code runs in a Cloudflare Worker on the free plan: the app's API (approvals, admin accounts, signed photo links, exports, birthday calendar sync, directory record sync, and email and push sends), scheduled jobs (Cron Triggers), and retried bulk work (Queues). It acts on Firebase with a service account key held as a Worker secret.
+- **Backend:** Firebase on the free Spark plan: Authentication (email and Google), Firestore, and Cloud Messaging (push). Server code runs in a Cloudflare Worker on the free plan: the app's API (approvals, admin accounts, signed photo links, exports, birthday calendar sync, directory record sync, and email and push sends), scheduled jobs (Cron Triggers), and retried bulk work (Queues). It acts on Firebase with a service account key held as a Worker secret.
 - **Database:** Firestore, with full member records in an admin-only collection and a limited directory record that members can read (FR-3.1, FR-5.2), enforced by Firestore security rules with automated tests.
 
 * **Email:** Gmail's mail server, sending as the shared project Google account with an app password, called from the Worker, with templates kept in one place in the codebase (FR-8.5). A free Gmail account can send a few hundred emails a day, so large sends are spread over several days (FR-2.5). The provider can be swapped by configuration; a Brevo provider is also built.
@@ -173,7 +173,7 @@ Voting, the opportunities board, events and announcements, success stories and s
 
 ## Out of scope
 
-Sign in with Apple. It needs a paid Apple Developer account, which the cost target does not allow. iPhone users sign in with email and password, Google, or Facebook.
+Sign in with Apple. It needs a paid Apple Developer account, which the cost target does not allow. iPhone users sign in with email and password, or Google.
 
 ## Open decisions
 

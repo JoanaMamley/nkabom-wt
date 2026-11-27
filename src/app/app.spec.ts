@@ -28,10 +28,7 @@ describe('App', () => {
         { provide: AppUpdates, useValue: updates },
         { provide: Theme, useValue: { mode: signal('light'), toggle: vi.fn() } },
         // Signed out.
-        {
-          provide: Accounts,
-          useValue: { currentUser: async () => null, pendingRedirect: () => null },
-        },
+        { provide: Accounts, useValue: { currentUser: async () => null } },
         { provide: FIREBASE_AUTH, useValue: { currentUser: null } },
       ],
     }).compileComponents();

@@ -9,8 +9,7 @@ export const appConfig: ApplicationConfig = {
   providers: [
     provideBrowserGlobalErrorListeners(),
     // A new page opens at its top, and Back returns to where the reader was. A link with a
-    // fragment, such as /privacy#rights (the data deletion address given to Meta, NKB-211, and
-    // linked from the terms, NKB-212), opens at that section.
+    // fragment, such as /privacy#rights (linked from the terms, NKB-212), opens at that section.
     provideRouter(
       routes,
       withInMemoryScrolling({ scrollPositionRestoration: 'enabled', anchorScrolling: 'enabled' }),

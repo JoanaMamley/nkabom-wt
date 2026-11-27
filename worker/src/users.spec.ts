@@ -15,21 +15,6 @@ function account(uid = 'ama', extra: Record<string, unknown> = {}) {
   );
 }
 
-// The Auth emulator, answering account updates (a role claim, or an address marked verified) too.
-function mockAuthUpdates(status = 200) {
-  const { firestore, fetch } = mockEmulators();
-  const emulate = fetch.getMockImplementation()!;
-  const updates: unknown[] = [];
-  fetch.mockImplementation(async (input, init) => {
-    if (String(input).endsWith('accounts:update')) {
-      updates.push(JSON.parse(String(init?.body)));
-      return Response.json({}, { status });
-    }
-    return emulate(input, init);
-  });
-  return { firestore, updates };
-}
-
 describe('requireAccount', () => {
   it('creates a member record on a new account’s first call', async () => {
     const { firestore } = mockEmulators();
@@ -69,8 +54,23 @@ describe('requireAccount', () => {
   });
 
   describe('role claim', () => {
+    // The Auth emulator, answering the claim update as well.
+    function mockClaimUpdate(status = 200) {
+      const { firestore, fetch } = mockEmulators();
+      const emulate = fetch.getMockImplementation()!;
+      const updates: unknown[] = [];
+      fetch.mockImplementation(async (input, init) => {
+        if (String(input).endsWith('accounts:update')) {
+          updates.push(JSON.parse(String(init?.body)));
+          return Response.json({}, { status });
+        }
+        return emulate(input, init);
+      });
+      return { firestore, updates };
+    }
+
     it('is corrected when the token’s claim differs from the record', async () => {
-      const { firestore, updates } = mockAuthUpdates();
+      const { firestore, updates } = mockClaimUpdate();
       firestore.docs.set('users/ama', { role: 'admin' });
 
       await expect(account('ama', { role: 'member' })).resolves.toMatchObject({ role: 'admin' });
@@ -83,7 +83,7 @@ describe('requireAccount', () => {
     });
 
     it('is left alone when it agrees, and a missing claim agrees with member', async () => {
-      const { firestore, updates } = mockAuthUpdates();
+      const { firestore, updates } = mockClaimUpdate();
       firestore.docs.set('users/ama', { role: 'admin' });
       firestore.docs.set('users/kofi', { role: 'member' });
 
@@ -94,7 +94,7 @@ describe('requireAccount', () => {
     });
 
     it('does not fail the call when it cannot be updated', async () => {
-      const { firestore } = mockAuthUpdates(500);
+      const { firestore } = mockClaimUpdate(500);
       firestore.docs.set('users/ama', { role: 'admin' });
       const logError = vi.spyOn(console, 'error').mockImplementation(() => undefined);
 
@@ -142,85 +142,6 @@ describe('requireAccount', () => {
     );
 
     await expect(account()).rejects.toMatchObject({ status: 'UNAVAILABLE' });
-  });
-
-  describe('an unverified address', () => {
-    const unverified = (provider: string, extra: Record<string, unknown> = {}) => ({
-      email_verified: false,
-      firebase: { sign_in_provider: provider, identities: {} },
-      ...extra,
-    });
-
-    it('is refused for an email and password account (FR-1.2)', async () => {
-      const { firestore, updates } = mockAuthUpdates();
-
-      await expect(account('ama', unverified('password'))).rejects.toMatchObject({
-        status: 403,
-        message: 'Verify your email address first',
-      });
-      expect(updates).toEqual([]);
-      expect(firestore.docs.has('users/ama')).toBe(false);
-    });
-
-    it('is counted as verified for a Facebook account, and marked so in Firebase (NKB-211)', async () => {
-      const { firestore, updates } = mockAuthUpdates();
-
-      await expect(account('ama', unverified('facebook.com'))).resolves.toMatchObject({
-        role: 'member',
-      });
-      expect(updates).toEqual([{ localId: 'ama', emailVerified: true }]);
-      expect(firestore.docs.get('users/ama')).toMatchObject({ email: 'ama@example.com' });
-    });
-
-    it('is not trusted from any other provider', async () => {
-      const { updates } = mockAuthUpdates();
-
-      await expect(account('ama', unverified('google.com'))).rejects.toMatchObject({
-        status: 403,
-      });
-      expect(updates).toEqual([]);
-    });
-
-    it('is refused for a Facebook account with no address', async () => {
-      const { firestore, updates } = mockAuthUpdates();
-
-      await expect(
-        account('ama', unverified('facebook.com', { email: undefined })),
-      ).rejects.toMatchObject({
-        status: 403,
-        message:
-          'Your Facebook account has no email address. Sign up with your email address instead.',
-      });
-      expect(updates).toEqual([]);
-      expect(firestore.docs.has('users/ama')).toBe(false);
-    });
-
-    it('is refused, to try again, when Firebase cannot mark it verified', async () => {
-      const { firestore } = mockAuthUpdates(503);
-      const logError = vi.spyOn(console, 'error').mockImplementation(() => undefined);
-
-      await expect(account('ama', unverified('facebook.com'))).rejects.toMatchObject({
-        status: 502,
-        message: 'Your Facebook login could not be finished. Please try again.',
-      });
-      expect(logError).toHaveBeenCalledWith(
-        'Facebook address not marked verified',
-        expect.anything(),
-      );
-      expect(firestore.docs.has('users/ama')).toBe(false);
-    });
-  });
-
-  it('refuses an admin who logs in with Facebook (FR-1.9)', async () => {
-    const { firestore } = mockAuthUpdates();
-    firestore.docs.set('users/ama', { role: 'admin', email: 'ama@example.com' });
-
-    await expect(
-      account('ama', {
-        role: 'admin',
-        firebase: { sign_in_provider: 'facebook.com', identities: {} },
-      }),
-    ).rejects.toMatchObject({ status: 403, message: 'Admins log in with email and password' });
   });
 
   it('refuses a missing sign-in before touching Firestore', async () => {

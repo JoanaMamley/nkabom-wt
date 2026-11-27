@@ -4,7 +4,7 @@
   <p class="form-error" role="alert">{{ message }}</p>
 }
 
-<button type="button" class="provider" [disabled]="busy() !== null" (click)="continue('google')">
+<button type="button" class="google" [disabled]="busy()" (click)="continue()">
   <!-- Google's "G" mark, as its sign-in branding guidelines ask. -->
   <svg viewBox="0 0 48 48" width="20" height="20" aria-hidden="true" focusable="false">
     <path
@@ -24,16 +24,5 @@
       d="M24 48c6.48 0 11.93-2.13 15.89-5.81l-7.73-6c-2.15 1.45-4.92 2.3-8.16 2.3-6.26 0-11.57-4.22-13.47-9.91l-7.98 6.19C6.51 42.62 14.62 48 24 48z"
     />
   </svg>
-  {{ busy() === 'google' ? 'Connecting to Google…' : 'Continue with Google' }}
-</button>
-
-<button type="button" class="provider" [disabled]="busy() !== null" (click)="continue('facebook')">
-  <!-- Facebook's "f" logo in its blue, as its brand guidelines ask. -->
-  <svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true" focusable="false">
-    <path
-      fill="#1877F2"
-      d="M24 12.07C24 5.41 18.63 0 12 0S0 5.4 0 12.07C0 18.1 4.39 23.1 10.13 24v-8.44H7.08v-3.49h3.04V9.41c0-3.02 1.8-4.7 4.54-4.7 1.31 0 2.68.24 2.68.24v2.97h-1.5c-1.5 0-1.96.93-1.96 1.89v2.26h3.32l-.53 3.5h-2.8V24C19.62 23.1 24 18.1 24 12.07"
-    />
-  </svg>
-  {{ busy() === 'facebook' ? 'Connecting to Facebook…' : 'Continue with Facebook' }}
+  {{ busy() ? 'Connecting to Google…' : 'Continue with Google' }}
 </button>
