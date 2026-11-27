@@ -95,8 +95,8 @@ export class LoginPage {
         return;
       }
       // Creates the users record on a first login and starts the session (README, Worker).
-      const me = await this.session.start();
-      await this.linkGoogle(user, me.role);
+      await this.session.start();
+      await this.linkGoogle(user);
       await this.router.navigateByUrl('/home');
     } catch (error) {
       if (error instanceof ApiError) {
@@ -111,17 +111,13 @@ export class LoginPage {
     }
   }
 
-  // NKB-213: adds the waiting Google sign-in to the account just logged in to, only for a member
-  // whose address is the one Google gave. Admins log in with their password only (FR-1.9), so
-  // Google is never added to theirs. Linking failing, as when that Google account already belongs
-  // to another Nkabom account, does not undo the login: the member can still use their password.
-  private async linkGoogle(user: User, role: string): Promise<void> {
+  // NKB-213: adds the waiting Google sign-in to the account just logged in to, only when its
+  // address is the one Google gave. Admins may log in with Google too (FR-1.9, NKB-213), so theirs
+  // is linked as a member's is. Linking failing, as when that Google account already belongs to
+  // another Nkabom account, does not undo the login: they can still use their password.
+  private async linkGoogle(user: User): Promise<void> {
     const link = this.pendingLink.take();
-    if (
-      !link?.emailVerified ||
-      role !== 'member' ||
-      link.email.toLowerCase() !== user.email?.toLowerCase()
-    ) {
+    if (!link?.emailVerified || link.email.toLowerCase() !== user.email?.toLowerCase()) {
       return;
     }
     try {

@@ -13,6 +13,7 @@ import { NonNullableFormBuilder, ReactiveFormsModule, Validators } from '@angula
 import { RouterLink } from '@angular/router';
 
 import { Api, ApiError } from '../core/api';
+import { RecentSignIn } from '../core/recent-sign-in';
 import { SOMETHING_WENT_WRONG } from '../core/messages';
 import type { Me } from '../core/session';
 
@@ -42,6 +43,7 @@ type State = 'checking' | 'ready' | 'denied' | 'error';
 })
 export class AddAdminPage implements OnInit {
   private readonly api = inject(Api);
+  private readonly recentSignIn = inject(RecentSignIn);
   private readonly pendingTasks = inject(PendingTasks);
   private readonly injector = inject(Injector);
 
@@ -90,11 +92,14 @@ export class AddAdminPage implements OnInit {
 
     const { name, email, calendarEmail } = this.form.getRawValue();
     try {
-      const admin = await this.api.post<CreatedAdmin>('/v1/admins', {
-        name: name.trim(),
-        email: email.trim(),
-        ...(calendarEmail.trim() && { calendarEmail: calendarEmail.trim() }),
-      });
+      // Managing admins needs a recent sign-in, which this asks for if needed (NKB-213).
+      const admin = await this.recentSignIn.run(() =>
+        this.api.post<CreatedAdmin>('/v1/admins', {
+          name: name.trim(),
+          email: email.trim(),
+          ...(calendarEmail.trim() && { calendarEmail: calendarEmail.trim() }),
+        }),
+      );
       this.added.set(admin);
       this.form.reset();
       this.submitted.set(false);

@@ -3,9 +3,12 @@ import {
   browserLocalPersistence,
   browserSessionPersistence,
   createUserWithEmailAndPassword,
+  EmailAuthProvider,
   getRedirectResult,
   GoogleAuthProvider,
   linkWithCredential,
+  reauthenticateWithCredential,
+  reauthenticateWithPopup,
   type OAuthCredential,
   setPersistence,
   signInWithEmailAndPassword,
@@ -108,6 +111,41 @@ export class Accounts {
   /** Adds the Google sign-in to the account (NKB-213), so the member can use either. */
   async linkGoogle(user: User, credential: OAuthCredential): Promise<void> {
     await linkWithCredential(user, credential);
+  }
+
+  /** How the signed-in user can sign in: 'password', 'google.com' or both (NKB-213). */
+  signInMethods(): string[] {
+    return this.auth.currentUser?.providerData.map((provider) => provider.providerId) ?? [];
+  }
+
+  /**
+   * Signs the current user in again with their password, so the Worker sees a recent sign-in
+   * (NKB-213), and takes a new ID token that says so.
+   */
+  async confirmWithPassword(password: string): Promise<void> {
+    const user = this.requireUser();
+    await reauthenticateWithCredential(user, EmailAuthProvider.credential(user.email!, password));
+    await user.getIdToken(true);
+  }
+
+  /**
+   * The same with Google, in a pop-up. Firebase refuses a Google account other than the one
+   * linked to this user (auth/user-mismatch).
+   */
+  async confirmWithGoogle(): Promise<void> {
+    const user = this.requireUser();
+    const provider = new GoogleAuthProvider();
+    provider.setCustomParameters({ prompt: 'select_account', login_hint: user.email ?? '' });
+    await reauthenticateWithPopup(user, provider);
+    await user.getIdToken(true);
+  }
+
+  private requireUser(): User {
+    const user = this.auth.currentUser;
+    if (!user) {
+      throw Object.assign(new Error('Not signed in'), { code: 'auth/no-current-user' });
+    }
+    return user;
   }
 
   signOut(): Promise<void> {

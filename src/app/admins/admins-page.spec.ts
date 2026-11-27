@@ -2,6 +2,7 @@ import { TestBed } from '@angular/core/testing';
 import { provideRouter } from '@angular/router';
 
 import { Api, ApiError } from '../core/api';
+import { NOT_CONFIRMED, RECENT_SIGN_IN_REQUIRED, RecentSignIn } from '../core/recent-sign-in';
 import { type Admin, AdminsPage } from './admins-page';
 
 const EFUA: Admin = {
@@ -162,9 +163,44 @@ describe('AdminsPage', () => {
 
     expect(api.post).toHaveBeenCalledWith('/v1/admins/kofi/reactivate');
     expect(page.querySelector('[role="status"]')?.textContent).toContain(
-      'Kofi Boateng has been reactivated and can log in again with their password.',
+      'Kofi Boateng has been reactivated and can log in again.',
     );
     expect(buttons('Kofi Boateng')).toEqual(['Make Primary Admin', 'Deactivate', 'Delete']);
+  });
+
+  // NKB-213: managing admins needs a recent sign-in.
+  it('asks to confirm it is you when the Worker wants a recent sign-in, then tries again', async () => {
+    const recent = TestBed.inject(RecentSignIn);
+    api.post.mockRejectedValueOnce(
+      new ApiError(403, 'For your safety, confirm it is you.', RECENT_SIGN_IN_REQUIRED),
+    );
+    const { page, click } = await render();
+
+    const clicked = click('Kofi Boateng', 'Deactivate');
+    await vi.waitFor(() => expect(recent.request()).not.toBeNull());
+    recent.request()!.done(true);
+    await clicked;
+
+    await vi.waitFor(() =>
+      expect(page.querySelector('[role="status"]')?.textContent).toContain('deactivated'),
+    );
+    expect(api.post).toHaveBeenCalledTimes(2);
+  });
+
+  it('changes nothing when the admin does not confirm', async () => {
+    const recent = TestBed.inject(RecentSignIn);
+    api.post.mockRejectedValueOnce(new ApiError(403, 'Confirm.', RECENT_SIGN_IN_REQUIRED));
+    const { page, click } = await render();
+
+    const clicked = click('Kofi Boateng', 'Deactivate');
+    await vi.waitFor(() => expect(recent.request()).not.toBeNull());
+    recent.request()!.done(false);
+    await clicked;
+
+    await vi.waitFor(() =>
+      expect(page.querySelector('[role="alert"]')?.textContent).toContain(NOT_CONFIRMED),
+    );
+    expect(api.post).toHaveBeenCalledTimes(1);
   });
 
   it('deletes an admin once confirmed', async () => {

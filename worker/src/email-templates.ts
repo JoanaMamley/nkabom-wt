@@ -20,6 +20,10 @@ export interface RenderedEmail {
 
 // Admin emails carry the member's name and a link only, never date of birth or other profile
 // details (FR-4.13).
+// NKB-213: admins may log in with Google too, which then guards their admin account.
+const GOOGLE_FOR_ADMINS =
+  'Once your password is set, you can also log in with Google if your login email is a Google account. If you do, turn on 2-Step Verification for that Google account, since it will open your admin account too.';
+
 export const EMAIL_TEMPLATES = {
   /** FR-1.2: a new email sign-up confirms their address before the account is active. */
   verifyEmail: (data: { link: string; expiresInHours: number }) => ({
@@ -55,8 +59,37 @@ export const EMAIL_TEMPLATES = {
     paragraphs: [
       'You have been made an admin of Nkabom, the WomenTrust alumnae community.',
       `Set your password with the link below before you first log in. It works once and expires in ${hours(data.expiresInHours)}.`,
+      GOOGLE_FOR_ADMINS,
     ],
     action: { label: 'Set your password', url: data.link },
+  }),
+
+  /**
+   * NKB-213: Google was used to sign in to an admin's account for the first time, so they can tell
+   * if it was not them. name is missing when the Google account gives none.
+   */
+  adminGoogleSignIn: (data: { name?: string }) => ({
+    subject: 'Google sign-in was used on your Nkabom admin account',
+    greeting: data.name ? `Hello ${data.name},` : 'Hello,',
+    paragraphs: [
+      'Your Nkabom admin account was just signed in to with Google for the first time. From now on you can log in with Google as well as with your password.',
+      'If this was you, there is nothing more to do, though we recommend turning on 2-Step Verification for your Google account, since it now opens your admin account too.',
+      'If it was not you, contact a Primary Admin straight away, so they can deactivate your account while it is looked into.',
+    ],
+  }),
+
+  /**
+   * NKB-213: the same news for the other Primary Admins, who can deactivate the admin if it was
+   * not them. For a @gmail.com address it matters most, since whoever holds the Google account can
+   * read the admin's own notice too.
+   */
+  adminGoogleSignInAlert: (data: { adminName: string; adminEmail: string }) => ({
+    subject: 'Google sign-in was used on an admin account',
+    greeting: 'Hello,',
+    paragraphs: [
+      `${data.adminName}${data.adminEmail ? ` (${data.adminEmail})` : ''} has just signed in to their Nkabom admin account with Google for the first time, and has been told so by email.`,
+      'If you are not sure it was them, check with them another way, such as by phone. If it was not, deactivate their account on the Admins page.',
+    ],
   }),
 
   /** FR-2.9: the member's registration was approved. */

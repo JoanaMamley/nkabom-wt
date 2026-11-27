@@ -39,7 +39,7 @@ async function handle(request: Request, env: Env): Promise<Response> {
     return await route(request, env);
   } catch (error) {
     if (error instanceof HttpError) {
-      return json({ error: error.message }, error.status);
+      return json({ error: error.message, ...(error.code && { code: error.code }) }, error.status);
     }
     console.error('Request failed', {
       method: request.method,

@@ -4,6 +4,8 @@ export class HttpError extends Error {
   constructor(
     readonly status: number,
     message: string,
+    /** A fixed word the app can act on, such as RECENT_SIGN_IN_REQUIRED (roles.ts). */
+    readonly code?: string,
   ) {
     super(message);
   }

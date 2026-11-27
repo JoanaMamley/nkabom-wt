@@ -1,0 +1,51 @@
+@if (request(); as current) {
+  <div class="backdrop">
+    <div
+      class="confirm"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="confirm-heading"
+      aria-describedby="confirm-message"
+      (keydown.escape)="cancel()"
+    >
+      <h2 id="confirm-heading" tabindex="-1" #heading>Confirm it’s you</h2>
+      <p id="confirm-message">{{ current.message }}</p>
+
+      @if (error(); as message) {
+        <p class="form-error" role="alert">{{ message }}</p>
+      }
+
+      @if (withPassword()) {
+        <form [formGroup]="form" (ngSubmit)="confirmWithPassword()" novalidate>
+          <div class="field has-reveal">
+            <input
+              #passwordInput
+              id="confirm-password"
+              type="password"
+              formControlName="password"
+              autocomplete="current-password"
+              placeholder=" "
+            />
+            <label for="confirm-password">Password</label>
+            <app-reveal-password [input]="passwordInput" />
+          </div>
+          <button type="submit" class="primary" [disabled]="busy()">
+            {{ busy() ? 'Checking…' : 'Confirm with password' }}
+          </button>
+        </form>
+      }
+
+      @if (withGoogle()) {
+        <button type="button" [disabled]="busy()" (click)="confirmWithGoogle()">
+          Confirm with Google
+        </button>
+      }
+
+      @if (!withPassword() && !withGoogle()) {
+        <p>Log out and log in again, then make the change within 15 minutes.</p>
+      }
+
+      <button type="button" class="cancel" [disabled]="busy()" (click)="cancel()">Cancel</button>
+    </div>
+  </div>
+}

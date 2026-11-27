@@ -25,8 +25,9 @@ const CANCELLED = ['auth/popup-closed-by-user', 'auth/cancelled-popup-request'];
 /**
  * "Continue with Google" for the login and sign-up pages (FR-1.1, NKB-210). Logs in, creating the
  * account on a first login, then starts the session as the login page does, which creates the
- * users record as a member, and goes to the home page. Admins log in with email and password only
- * (FR-1.9): the Worker refuses an admin who uses Google, and this signs them out again and says why.
+ * users record as a member, and goes to the home page. Admins may use Google too, once it is
+ * linked to their admin account (FR-1.9, NKB-213). If the Worker refuses, this signs them out
+ * again and says why.
  * When an email and password account already has the address and Google says it is verified, it
  * keeps the Google sign-in and sends the member to log in with their password, after which the
  * login page adds Google to the account (FR-1.3, NKB-213).

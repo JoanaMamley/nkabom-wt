@@ -59,6 +59,11 @@ export interface UserRecord {
    * their Firebase account is disabled (NKB-209). Reactivating sets it back to active.
    */
   status?: AccountStatus;
+  /**
+   * When the admin was told of the first Google sign-in to their account (NKB-213, users.ts), so
+   * they are told only once.
+   */
+  googleSignInNoticeAt?: Date;
   /** When the admin was last deactivated, kept after a reactivation. */
   deactivatedAt?: Date;
   reactivatedAt?: Date;
@@ -114,6 +119,7 @@ export type DirectoryEntry = Pick<MemberProfile, (typeof DIRECTORY_FIELDS)[numbe
 // FR-8.3: the admin actions the audit log records. Add new actions here.
 export const AUDIT_ACTIONS = [
   'admin.login',
+  'admin.googleSignIn',
   'admin.create',
   'admin.roleChange',
   'admin.deactivate',

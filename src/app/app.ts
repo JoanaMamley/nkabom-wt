@@ -10,6 +10,7 @@ import {
 } from '@angular/router';
 import { filter, map } from 'rxjs';
 
+import { ConfirmSignIn } from './confirm-sign-in/confirm-sign-in';
 import { AppUpdates } from './core/app-updates';
 import { Connectivity } from './core/connectivity';
 import { Session } from './core/session';
@@ -18,7 +19,7 @@ import { ThemeToggle } from './theme-toggle/theme-toggle';
 
 @Component({
   selector: 'app-root',
-  imports: [RouterLink, RouterOutlet, OfflinePage, ThemeToggle],
+  imports: [ConfirmSignIn, RouterLink, RouterOutlet, OfflinePage, ThemeToggle],
   templateUrl: './app.html',
   styleUrl: './app.scss',
 })
