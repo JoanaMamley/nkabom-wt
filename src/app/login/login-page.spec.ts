@@ -21,8 +21,8 @@ describe('LoginPage', () => {
   const accounts = {
     logIn: vi.fn(),
     signOut: vi.fn(),
-    logInWithGoogle: vi.fn(),
-    googleRedirectResult: vi.fn(),
+    logInWith: vi.fn(),
+    pendingRedirect: vi.fn(),
   };
   const session = { start: vi.fn(), expiredMessage: signal<string | null>(null) };
   const verification = { sendError: signal<string | null>(null) };
@@ -31,7 +31,7 @@ describe('LoginPage', () => {
   beforeEach(() => {
     accounts.logIn.mockReset().mockResolvedValue({ emailVerified: true });
     accounts.signOut.mockReset().mockResolvedValue(undefined);
-    accounts.googleRedirectResult.mockReset().mockResolvedValue(null);
+    accounts.pendingRedirect.mockReset().mockReturnValue(null);
     session.start.mockReset().mockResolvedValue({ uid: 'ama', role: 'member' });
     session.expiredMessage.set(null);
     TestBed.configureTestingModule({
@@ -174,18 +174,24 @@ describe('LoginPage', () => {
     );
   });
 
-  it('offers Google login, remembering the sign-in only when asked (NKB-210)', async () => {
-    accounts.logInWithGoogle.mockResolvedValue(null);
+  it('offers Google and Facebook login, remembering the sign-in only when asked (NKB-210, NKB-211)', async () => {
+    accounts.logInWith.mockResolvedValue(null);
     const { page } = await render();
-    const google = () => page.querySelector<HTMLButtonElement>('app-google-sign-in button')!;
+    const button = (name: string) =>
+      [...page.querySelectorAll<HTMLButtonElement>('app-social-sign-in button')].find((element) =>
+        element.textContent?.includes(name),
+      )!;
 
-    google().click();
+    button('Google').click();
     await TestBed.inject(ApplicationRef).whenStable();
     page.querySelector<HTMLInputElement>('input[type="checkbox"]')!.click();
     await TestBed.inject(ApplicationRef).whenStable();
-    google().click();
+    button('Facebook').click();
     await TestBed.inject(ApplicationRef).whenStable();
 
-    expect(accounts.logInWithGoogle.mock.calls).toEqual([[false], [true]]);
+    expect(accounts.logInWith.mock.calls).toEqual([
+      ['google', false],
+      ['facebook', true],
+    ]);
   });
 });
