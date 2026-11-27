@@ -64,7 +64,7 @@ describe('App', () => {
     expect(compiled.querySelector('main h1')?.textContent).toContain('Log in');
   });
 
-  it('gives the login page the whole screen, with its own toggle and privacy link', async () => {
+  it('gives the login page the whole screen, with its own toggle, privacy and terms links', async () => {
     const compiled = await render('/login');
 
     expect(compiled.querySelector('header')).toBeNull();
@@ -72,6 +72,9 @@ describe('App', () => {
     expect(compiled.querySelector('app-auth-layout app-theme-toggle button')).not.toBeNull();
     expect(compiled.querySelector('app-auth-layout a[href="/privacy"]')?.textContent).toContain(
       'Privacy notice',
+    );
+    expect(compiled.querySelector('app-auth-layout a[href="/terms"]')?.textContent).toContain(
+      'Terms of service',
     );
   });
 
@@ -98,12 +101,23 @@ describe('App', () => {
     expect(brand?.querySelector('img')?.getAttribute('src')).toBe('icons/mark.svg');
   });
 
-  it('links to the privacy notice from the footer (FR-1.13)', async () => {
+  it('links to the privacy notice (FR-1.13) and the terms from the footer', async () => {
     const compiled = await render('/privacy');
 
-    const link = compiled.querySelector<HTMLAnchorElement>('footer a');
-    expect(link?.textContent).toContain('Privacy notice');
-    expect(link?.getAttribute('href')).toBe('/privacy');
+    const links = [...compiled.querySelectorAll<HTMLAnchorElement>('footer a')].map((link) => [
+      link.textContent?.trim(),
+      link.getAttribute('href'),
+    ]);
+    expect(links).toEqual([
+      ['Privacy notice', '/privacy'],
+      ['Terms of service', '/terms'],
+    ]);
+  });
+
+  it('shows the terms of service at /terms', async () => {
+    const compiled = await render('/terms');
+
+    expect(compiled.querySelector('main h1')?.textContent).toContain('Terms of service');
   });
 
   it('shows the privacy notice at /privacy', async () => {

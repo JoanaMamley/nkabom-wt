@@ -70,7 +70,11 @@
       <div class="panel-body">
         <ng-content />
       </div>
-      <p class="panel-footer"><a routerLink="/privacy">Privacy notice</a></p>
+      <p class="panel-footer">
+        <a routerLink="/privacy">Privacy notice</a>
+        <span aria-hidden="true">·</span>
+        <a routerLink="/terms">Terms of service</a>
+      </p>
     </div>
   </div>
 </div>

@@ -33,6 +33,7 @@ const PUBLIC_PAGES = [
   '/reset-password',
   '/set-password',
   '/sign-up',
+  '/terms',
   '/verify-email',
 ];
 
@@ -61,7 +62,7 @@ describe('routes (FR-1.12)', () => {
     return reached.sort();
   }
 
-  it('lets someone logged out open only login, sign-up and the privacy notice, with their steps', async () => {
+  it('lets someone logged out open only login, sign-up, the privacy notice and the terms, with their steps', async () => {
     user = null;
     expect(await reachable()).toEqual(PUBLIC_PAGES);
   });

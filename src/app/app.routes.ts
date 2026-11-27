@@ -11,6 +11,7 @@ import { PrivacyPage } from './privacy/privacy-page';
 import { CheckEmailPage } from './sign-up/check-email-page';
 import { SignUpPage } from './sign-up/sign-up-page';
 import { VerifyEmailPage } from './sign-up/verify-email-page';
+import { TermsPage } from './terms/terms-page';
 
 // fullScreen: the page brings its own layout (AuthLayout), so the app's header and footer hide.
 function open(access: Access, fullScreen = true) {
@@ -21,10 +22,11 @@ export const routes: Routes = [
   { path: '', pathMatch: 'full', redirectTo: 'login' },
   {
     // Default deny (FR-1.12, NKB-206): every page goes here, and is for logged-in members unless
-    // its data opens it with open(). Only login, sign-up and the privacy notice are open, with the
-    // two steps that confirm a sign-up's email address (FR-1.2), which the emailed link may open on
-    // another device, the two that reset a forgotten password (FR-1.4), and the one where a new
-    // admin sets their first password (FR-1.8).
+    // its data opens it with open(). Only login, sign-up, the privacy notice and the terms of
+    // service (NKB-212, which Meta and Google read logged out) are open, with the two steps that
+    // confirm a sign-up's email address (FR-1.2), which the emailed link may open on another
+    // device, the two that reset a forgotten password (FR-1.4), and the one where a new admin sets
+    // their first password (FR-1.8).
     path: '',
     canActivateChild: [defaultDeny],
     children: [
@@ -40,6 +42,12 @@ export const routes: Routes = [
         component: PrivacyPage,
         data: open('public', false),
         title: 'Privacy notice · Nkabom',
+      },
+      {
+        path: 'terms',
+        component: TermsPage,
+        data: open('public', false),
+        title: 'Terms of service · Nkabom',
       },
       {
         path: 'check-email',

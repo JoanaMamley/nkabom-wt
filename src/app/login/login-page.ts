@@ -28,10 +28,10 @@ export function greeting(hour: number): string {
 }
 
 /**
- * Login with email and password, Google or Facebook (FR-1.1), and the app's first page: / leads here. One of the
- * three pages anyone can see without logging in (FR-1.12). An account whose email is not
- * verified goes to the check-email page (FR-1.2). After a session expires (FR-1.10, core/session.ts)
- * it opens saying so.
+ * Login with email and password, Google or Facebook (FR-1.1), and the app's first page: / leads
+ * here. One of the four pages anyone can see without logging in (FR-1.12). An account whose email
+ * is not verified goes to the check-email page (FR-1.2). After a session expires (FR-1.10,
+ * core/session.ts) it opens saying so.
  */
 @Component({
   selector: 'app-login-page',

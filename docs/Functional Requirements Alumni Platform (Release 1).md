@@ -21,7 +21,7 @@ Functional requirements, Release 1. 17 October 2026.
 - **FR-1.9** Admins log in with email and password only, not social login.
 - **FR-1.10** Sessions expire after inactivity, and admin sessions are shorter than member sessions.
 - **FR-1.11** Admin routes and APIs are enforced server-side, not only hidden in the UI.
-- **FR-1.12** Nothing on the site is visible before login except three pages: login, sign-up, and the privacy notice. Every other page and API requires an authenticated session.
+- **FR-1.12** Nothing on the site is visible before login except four pages: login, sign-up, the privacy notice, and the terms of service (added with NKB-212, since Meta and Google read the terms logged out before publishing social login). Every other page and API requires an authenticated session.
 - **FR-1.13** The privacy notice is linked from the login page, the sign-up page, and the site footer.
 - **FR-1.14** The privacy notice explains in plain language:
   - what data is collected (name, date of birth, occupation or course, graduation year, photo)

@@ -1,0 +1,110 @@
+<article class="notice">
+  <h1>Terms of service</h1>
+  <p class="updated">Last updated 27 November 2026</p>
+
+  <p>
+    Nkabom is the online community of WomenTrust alumnae. These terms are the rules for using the
+    site. By creating an account, you agree to them. How we handle your data is in the
+    <a routerLink="/privacy">privacy notice</a>.
+  </p>
+
+  <section id="who-runs" aria-labelledby="who-runs-title">
+    <h2 id="who-runs-title">Who runs Nkabom</h2>
+    <p>
+      Nkabom is run by the executives of the WomenTrust Graduate Association, who look after it as
+      the site's admins.
+    </p>
+  </section>
+
+  <section id="who-can-join" aria-labelledby="who-can-join-title">
+    <h2 id="who-can-join-title">Who can join</h2>
+    <ul>
+      <li>Nkabom is for WomenTrust alumnae.</li>
+      <li>
+        The executives check each registration before it is approved, and may turn down one they
+        cannot confirm.
+      </li>
+      <li>Each person may have one account.</li>
+    </ul>
+  </section>
+
+  <section id="your-account" aria-labelledby="your-account-title">
+    <h2 id="your-account-title">Your account</h2>
+    <ul>
+      <li>Give true details about yourself, and keep them up to date.</li>
+      <li>
+        Keep your password to yourself. If you think someone else has used your account, change your
+        password and tell the executives.
+      </li>
+      <li>
+        If you log in with Google or Facebook, their own terms apply to your account with them too.
+      </li>
+    </ul>
+  </section>
+
+  <section id="using" aria-labelledby="using-title">
+    <h2 id="using-title">Using Nkabom</h2>
+    <ul>
+      <li>Treat other members with respect.</li>
+      <li>
+        Use what you see about other members, such as their profile or the contact details shared
+        through mentorship, only for the community and mentorship. Do not share it outside Nkabom.
+      </li>
+      <li>
+        Do not use Nkabom to harass anyone, to send advertising or spam, or to pretend to be someone
+        else.
+      </li>
+    </ul>
+  </section>
+
+  <section id="constitution" aria-labelledby="constitution-title">
+    <h2 id="constitution-title">The constitution</h2>
+    <p>
+      Members also agree to the WomenTrust Graduate Association's constitution, which they read and
+      accept on the site when they register, and again whenever it changes. The constitution sets
+      the rules of membership; these terms cover only the use of the site.
+    </p>
+  </section>
+
+  <section id="ending" aria-labelledby="ending-title">
+    <h2 id="ending-title">Ending an account</h2>
+    <ul>
+      <li>
+        You can ask for your account to be deleted at any time, as the
+        <a routerLink="/privacy" fragment="rights">privacy notice</a> explains.
+      </li>
+      <li>
+        The executives may suspend or remove an account that breaks these terms or the constitution.
+      </li>
+    </ul>
+  </section>
+
+  <section id="free" aria-labelledby="free-title">
+    <h2 id="free-title">A free service</h2>
+    <p>
+      Nkabom is free, and is offered as it is. We work to keep it running and your data safe, but
+      cannot promise that it will always be available or free of mistakes.
+    </p>
+  </section>
+
+  <section id="changes" aria-labelledby="changes-title">
+    <h2 id="changes-title">Changes to these terms</h2>
+    <p>
+      We may update these terms. The date at the top shows the last change, and we will tell members
+      about any important one.
+    </p>
+  </section>
+
+  <section id="contact" aria-labelledby="contact-title">
+    <h2 id="contact-title">Who to contact</h2>
+    @if (contact) {
+      <p>
+        For any question about these terms, email
+        <a [href]="'mailto:' + contact">{{ contact }}</a
+        >.
+      </p>
+    } @else {
+      <p>For any question about these terms, contact any of the executives.</p>
+    }
+  </section>
+</article>

@@ -125,6 +125,7 @@ That completes NKB-113. The rest of the set-up comes with the stories that need 
 - **NKB-119:** test a backup restore, then record it in the README.
 - **NKB-210:** follow [Setting up Google login](../../README.md#setting-up-google-login) in the README: turn on Google sign-in, publish the Google Auth Platform sign-in screen, and set `authDomain` and the redirect address for each project.
 - **NKB-211:** follow [Setting up Facebook login](../../README.md#setting-up-facebook-login) in the README: create a Meta developer app for each project with your own Facebook account (Meta has no shared accounts) and add a second app admin, turn on Facebook sign-in in Firebase, and publish the Meta app.
+- **NKB-212:** once `/terms` is live, set `https://<project>.firebaseapp.com/terms` as each Meta app's **Terms of Service URL** and the Google Auth Platform's terms link, then publish the Meta apps ([Setting up Facebook login](../../README.md#setting-up-facebook-login), step 6).
 - **NKB-121:** follow [Setting up deploys](../../README.md#setting-up-deploys) in the README: run the Workload Identity Federation script in Cloud Shell for each project, make the Cloudflare API token, and add the GitHub environments, secrets and variables.
 
 For the restore test, staging needs some data first: add a few documents in the Firebase console under **Firestore**, or a test user under **Authentication > Users > Add user** once NKB-117 creates user records.
