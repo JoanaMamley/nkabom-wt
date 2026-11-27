@@ -9,7 +9,7 @@ import { Session } from '../core/session';
 import { Verification } from './verification';
 
 describe('SignUpPage', () => {
-  const accounts = { signUp: vi.fn(), pendingRedirect: () => null };
+  const accounts = { signUp: vi.fn(), googleRedirectResult: async () => null };
   const verification = { send: vi.fn() };
 
   beforeEach(() => {
@@ -27,14 +27,12 @@ describe('SignUpPage', () => {
     });
   });
 
-  it('offers Google and Facebook sign-up beside the form (NKB-210, NKB-211)', async () => {
+  it('offers Google sign-up beside the form (NKB-210)', async () => {
     const { page } = await render();
 
-    expect(
-      [...page.querySelectorAll('app-social-sign-in button')].map((button) =>
-        button.textContent?.trim(),
-      ),
-    ).toEqual(['Continue with Google', 'Continue with Facebook']);
+    expect(page.querySelector('app-google-sign-in button')?.textContent).toContain(
+      'Continue with Google',
+    );
   });
 
   async function render() {

@@ -23,7 +23,7 @@ export const routes: Routes = [
   {
     // Default deny (FR-1.12, NKB-206): every page goes here, and is for logged-in members unless
     // its data opens it with open(). Only login, sign-up, the privacy notice and the terms of
-    // service (NKB-212, which Meta and Google read logged out) are open, with the two steps that
+    // service (NKB-212) are open, with the two steps that
     // confirm a sign-up's email address (FR-1.2), which the emailed link may open on another
     // device, the two that reset a forgotten password (FR-1.4), and the one where a new admin sets
     // their first password (FR-1.8).

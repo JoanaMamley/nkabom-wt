@@ -8,7 +8,7 @@ import {
   WriteBatch,
   type Fields,
 } from './firestore';
-import { markEmailVerified, setRoleClaim } from './firebase-auth';
+import { setRoleClaim } from './firebase-auth';
 import { HttpError } from './http';
 import { ADMIN_ROLES } from './roles';
 import { ROLES, USERS, type Role } from './model';
@@ -27,14 +27,13 @@ export interface Account extends User {
  * reads the caller's users record, so the role is current on every call and a demoted or
  * deactivated admin loses access at once. The first call from a new account creates its record as
  * a member, which is why the app calls GET /v1/me straight after sign-up. An account whose email address is not yet
- * verified is refused, so it cannot log in (FR-1.2, verification.ts), except a Facebook one
- * (trustFacebookAddress). A sign-in that has expired
+ * verified is refused, so it cannot log in (FR-1.2, verification.ts). A sign-in that has expired
  * is refused with 401, and otherwise its activity is recorded (FR-1.10, sessions.ts).
  */
 export async function requireAccount(request: Request, env: Env): Promise<Account> {
   const user = await requireUser(request, env);
   if (!user.emailVerified) {
-    await trustFacebookAddress(env, user);
+    throw new HttpError(403, 'Verify your email address first');
   }
   const { role, status } = await userRecord(env, user);
   // A deactivated admin (NKB-209) is refused as a revoked sign-in is, with 401, so the app logs
@@ -51,32 +50,6 @@ export async function requireAccount(request: Request, env: Env): Promise<Accoun
   const session = await touchSession(env, user, role);
   await syncRoleClaim(env, user, role);
   return { ...user, role, session };
-}
-
-/**
- * Firebase often marks a Facebook account's address unverified, but Facebook gives out only
- * addresses its users have confirmed, so Nkabom counts it as verified (NKB-211) rather than
- * sending a verification email. The account is marked verified in Firebase Auth, so the app's
- * next ID token says so for the rules too (the app refreshes it after GET /v1/me), and this call
- * goes on. Any other unverified account is refused, as is a Facebook account with no address,
- * which Facebook allows for accounts made with a phone number.
- */
-async function trustFacebookAddress(env: Env, user: User): Promise<void> {
-  if (user.signInProvider !== 'facebook.com') {
-    throw new HttpError(403, 'Verify your email address first');
-  }
-  if (!user.email) {
-    throw new HttpError(
-      403,
-      'Your Facebook account has no email address. Sign up with your email address instead.',
-    );
-  }
-  try {
-    await markEmailVerified(env, user.uid);
-  } catch (error) {
-    console.error('Facebook address not marked verified', { uid: user.uid, error: String(error) });
-    throw new HttpError(502, 'Your Facebook login could not be finished. Please try again.');
-  }
 }
 
 // The Firestore rules read the role from the token (NKB-204), so when the token's claim differs

@@ -3,7 +3,6 @@ import {
   browserLocalPersistence,
   browserSessionPersistence,
   createUserWithEmailAndPassword,
-  FacebookAuthProvider,
   getRedirectResult,
   GoogleAuthProvider,
   setPersistence,
@@ -42,46 +41,36 @@ export class Accounts {
   }
 
   /**
-   * Logs in with Google (NKB-210) or Facebook (NKB-211) (FR-1.1), creating the account on a first
-   * login. Google accounts have verified addresses; Facebook ones Firebase often marks unverified,
-   * and the Worker counts them as verified on the first call (requireAccount), so neither gets a
-   * verification email. Uses a pop-up, except in an app installed on an iPhone's Home Screen,
-   * where the pop-up cannot hand the sign-in back: there the page goes to the provider and comes
-   * back, and this resolves to null as it leaves. The page it comes back to finishes with
-   * socialRedirectResult(). remember is as for logIn; leaving it out keeps the sign-in after the
-   * browser closes, as sign-up does.
+   * Logs in with Google (FR-1.1, NKB-210), creating the account on a first login. Google accounts
+   * have verified addresses, so no verification email is needed. Uses a pop-up, except in an
+   * app installed on an iPhone's Home Screen, where the pop-up cannot hand the sign-in back: there
+   * the page goes to Google and comes back, and this resolves to null as it leaves. The page it
+   * comes back to finishes with googleRedirectResult(). remember is as for logIn; leaving it out
+   * keeps the sign-in after the browser closes, as sign-up does.
    */
-  async logInWith(provider: SocialProvider, remember = true): Promise<User | null> {
+  async logInWithGoogle(remember = true): Promise<User | null> {
     await setPersistence(this.auth, remember ? browserLocalPersistence : browserSessionPersistence);
-    const authProvider = providerFor(provider);
+    const provider = new GoogleAuthProvider();
+    // On a shared device, let each member pick their own Google account.
+    provider.setCustomParameters({ prompt: 'select_account' });
     if (installedOnIPhone()) {
-      sessionStorage.setItem(SOCIAL_REDIRECT_KEY, provider);
-      await signInWithRedirect(this.auth, authProvider);
+      sessionStorage.setItem(GOOGLE_REDIRECT_KEY, '1');
+      await signInWithRedirect(this.auth, provider);
       return null;
     }
-    return (await signInWithPopup(this.auth, authProvider)).user;
+    return (await signInWithPopup(this.auth, provider)).user;
   }
 
   /**
-   * The provider of a Google or Facebook login that this tab sent to the provider (logInWith) and
-   * has not yet finished, or null. Finish it with socialRedirectResult().
+   * The user from a Google login that went to Google and came back (logInWithGoogle), or null if
+   * this page load is not one. Checks for one only when this tab started it, since asking Firebase
+   * otherwise costs a network round trip on every visit to the page.
    */
-  pendingRedirect(): SocialProvider | null {
-    const provider = sessionStorage.getItem(SOCIAL_REDIRECT_KEY);
-    return provider === 'google' || provider === 'facebook' ? provider : null;
-  }
-
-  /**
-   * The user from a login that went to the provider and came back (logInWith), or null if this
-   * page load is not one, or the member came back without logging in. Asks Firebase only when this
-   * tab started one (pendingRedirect), since asking otherwise costs a network round trip on every
-   * visit to the page.
-   */
-  async socialRedirectResult(): Promise<User | null> {
-    if (!this.pendingRedirect()) {
+  async googleRedirectResult(): Promise<User | null> {
+    if (!sessionStorage.getItem(GOOGLE_REDIRECT_KEY)) {
       return null;
     }
-    sessionStorage.removeItem(SOCIAL_REDIRECT_KEY);
+    sessionStorage.removeItem(GOOGLE_REDIRECT_KEY);
     return (await getRedirectResult(this.auth))?.user ?? null;
   }
 
@@ -90,27 +79,8 @@ export class Accounts {
   }
 }
 
-/** The providers members can log in with besides email and password (FR-1.1). */
-export type SocialProvider = 'google' | 'facebook';
-
-function providerFor(provider: SocialProvider): GoogleAuthProvider | FacebookAuthProvider {
-  if (provider === 'google') {
-    const google = new GoogleAuthProvider();
-    // On a shared device, let each member pick their own Google account.
-    google.setCustomParameters({ prompt: 'select_account' });
-    return google;
-  }
-  const facebook = new FacebookAuthProvider();
-  // The address is how Nkabom reaches the member, so ask for it as well as the public profile.
-  facebook.addScope('email');
-  return facebook;
-}
-
-/**
- * Set in sessionStorage, to the provider, while a login has gone to Google or Facebook and not
- * yet come back.
- */
-const SOCIAL_REDIRECT_KEY = 'nkabom.socialRedirect';
+/** Set in sessionStorage while a Google login has gone to Google and not yet come back. */
+const GOOGLE_REDIRECT_KEY = 'nkabom.googleRedirect';
 
 /** Whether the app runs from an iPhone's (or iPad's) Home Screen, which only Safari reports. */
 export function installedOnIPhone(): boolean {
