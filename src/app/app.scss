@@ -16,6 +16,9 @@ main {
 }
 
 .app-footer {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
   padding: 1rem;
   border-top: 1px solid var(--color-border);
   font-size: 0.875rem;

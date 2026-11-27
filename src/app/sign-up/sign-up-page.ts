@@ -17,7 +17,7 @@ const SIGN_UP_ERRORS: Record<string, string> = {
 };
 
 /**
- * Sign-up with email and password (NKB-202, FR-1.1, FR-1.2). One of the three pages anyone can see
+ * Sign-up with email and password (NKB-202, FR-1.1, FR-1.2). One of the four pages anyone can see
  * without logging in (FR-1.12). Creates the Firebase account, has the Worker email a verification
  * link, then shows the check-email page. The account cannot log in until the address is verified.
  * Signing up with Google (NKB-210) or Facebook (NKB-211) needs no verification email, so it goes
