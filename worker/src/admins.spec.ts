@@ -5,7 +5,7 @@ import type { Env } from './env';
 import { FakeFirestore } from './fake-firestore';
 import worker from './index';
 import { MIN_PASSWORD_LENGTH, SET_PASSWORD_LINK_HOURS } from './password-reset';
-import { ADMIN_PASSWORD_ONLY } from './users';
+import { RECENT_SIGN_IN_MINUTES, RECENT_SIGN_IN_REQUIRED } from './roles';
 import { emulatorEnv, signedIn } from './test-helpers';
 
 const env = emulatorEnv({ PHOTO_LINK_KEY: 'test-link-key', EMAIL_PROVIDER: 'log' });
@@ -324,73 +324,120 @@ describe('admin sign-in methods (FR-1.9)', () => {
   const me = (uid: string, provider: string) =>
     worker.fetch(
       new Request('https://api.test/v1/me', {
-        headers: signedIn(uid, { firebase: { sign_in_provider: provider } }),
+        headers: signedIn(uid, {
+          email: `${uid}@example.com`,
+          firebase: { sign_in_provider: provider },
+        }),
       }) as Request<unknown, IncomingRequestCfProperties>,
       env,
     );
 
-  it('refuses an admin who signed in any way but email and password', async () => {
-    for (const uid of ['efua', 'kofi']) {
-      const response = await me(uid, 'google.com');
-      expect(response.status).toBe(403);
-      expect(await response.json()).toEqual({ error: ADMIN_PASSWORD_ONLY });
-      expect((await me(uid, 'password')).status).toBe(200);
-    }
-  });
-
-  // NKB-213: for @gmail.com addresses Firebase adds Google to the admin's account before the
-  // Worker sees the sign-in, so the refusal takes it off again and revokes that sign-in.
-  it("takes Google off an admin's account and ends that sign-in", async () => {
-    const google = signedIn('kofi', { firebase: { sign_in_provider: 'google.com' } });
-    const call = () =>
-      worker.fetch(
-        new Request('https://api.test/v1/me', { headers: google }) as Request<
-          unknown,
-          IncomingRequestCfProperties
-        >,
-        env,
-      );
-    vi.useFakeTimers({ now: Date.now() + 1000, toFake: ['Date'] });
-    try {
-      expect((await call()).status).toBe(403);
-    } finally {
-      vi.useRealTimers();
-    }
-    const update = vi
-      .mocked(fetch)
-      .mock.calls.map(
-        ([, init]) => JSON.parse(String(init?.body ?? '{}')) as Record<string, unknown>,
-      )
-      .find((body) => 'deleteProvider' in body);
-    expect(update).toMatchObject({ localId: 'kofi', deleteProvider: ['google.com'] });
-    // The same Google sign-in is now revoked, and Kofi can still log in with his password.
-    expect((await call()).status).toBe(401);
-    const later = signedIn('kofi', { auth_time: Math.floor(Date.now() / 1000) + 2 });
-    const password = await worker.fetch(
-      new Request('https://api.test/v1/me', { headers: later }) as Request<
-        unknown,
-        IncomingRequestCfProperties
-      >,
-      env,
+  /** The emails written to the log with this subject. */
+  const sent = (subject: string) =>
+    (log.mock.calls as [string, { subject?: string; to?: string }][]).filter(
+      ([, email]) => email?.subject === subject,
     );
-    expect(password.status).toBe(200);
+  const GOOGLE_NOTICE = 'Google sign-in was used on your Nkabom admin account';
+  const GOOGLE_ALERT = 'Google sign-in was used on an admin account';
+
+  it('lets an admin sign in with email and password or Google (NKB-213)', async () => {
+    for (const uid of ['efua', 'kofi']) {
+      expect((await me(uid, 'password')).status).toBe(200);
+      expect((await me(uid, 'google.com')).status).toBe(200);
+    }
   });
 
-  it('still refuses the admin when undoing the sign-in fails', async () => {
+  it('refuses an admin who signed in any other way', async () => {
+    for (const provider of ['custom', 'anonymous', 'phone']) {
+      const response = await me('kofi', provider);
+      expect(response.status).toBe(403);
+      expect(await response.json()).toEqual({
+        error: 'Admins log in with email and password or Google',
+      });
+    }
+  });
+
+  it("tells an admin once, by email and in the audit log, of their account's first Google sign-in", async () => {
+    await me('kofi', 'password');
+    expect(sent(GOOGLE_NOTICE)).toEqual([]);
+
+    await me('kofi', 'google.com');
+    await me('kofi', 'google.com');
+
+    expect(sent(GOOGLE_NOTICE).map(([, email]) => email.to)).toEqual(['kofi@example.com']);
+    // The other Primary Admins are told too, since whoever holds Kofi's Google account may read
+    // his email; Efua is the only one here.
+    expect(sent(GOOGLE_ALERT).map(([, email]) => email.to)).toEqual(['efua@example.com']);
+    expect(firestore.docs.get('users/kofi')!['googleSignInNoticeAt']).toBeTruthy();
+    const entries = [...firestore.docs].filter(
+      ([path, entry]) => path.startsWith('auditLog/') && entry['action'] === 'admin.googleSignIn',
+    );
+    expect(entries).toHaveLength(1);
+    expect(entries[0][1]).toMatchObject({ target: { type: 'admin', id: 'kofi' } });
+  });
+
+  it("tells a Primary Admin's own Google sign-in to the other Primary Admins, not to them", async () => {
+    firestore.docs.set('users/esi', { role: 'primaryAdmin', email: 'esi@example.com' });
+    firestore.docs.set('users/abla', {
+      role: 'primaryAdmin',
+      email: 'abla@example.com',
+      status: 'deactivated',
+    });
+
+    await me('efua', 'google.com');
+
+    expect(sent(GOOGLE_NOTICE).map(([, email]) => email.to)).toEqual(['efua@example.com']);
+    expect(sent(GOOGLE_ALERT).map(([, email]) => email.to)).toEqual(['esi@example.com']);
+  });
+
+  it('does not stop the sign-in when the notice cannot be sent', async () => {
     const error = vi.spyOn(console, 'error').mockImplementation(() => undefined);
     const original = vi.mocked(fetch).getMockImplementation()!;
     vi.mocked(fetch).mockImplementation(async (input, init) =>
-      String(init?.body ?? '').includes('deleteProvider')
+      String(init?.body ?? '').includes('googleSignInNoticeAt')
         ? new Response('nope', { status: 500 })
         : original(input, init),
     );
-    expect((await me('kofi', 'google.com')).status).toBe(403);
-    expect(error).toHaveBeenCalledWith('Admin sign-in not undone', expect.anything());
+    expect((await me('kofi', 'google.com')).status).toBe(200);
+    expect(error).toHaveBeenCalledWith('Google sign-in notice not sent', expect.anything());
   });
 
-  it('lets a member sign in another way, and leaves their account alone', async () => {
+  it('lets a member sign in with Google without any notice', async () => {
     expect((await me('ama', 'google.com')).status).toBe(200);
-    expect(accounts.get('ama')!.validSince).toBeUndefined();
+    expect(sent(GOOGLE_NOTICE)).toEqual([]);
+    expect(sent(GOOGLE_ALERT)).toEqual([]);
+  });
+});
+
+// NKB-213: managing admins needs a sign-in from the last few minutes.
+describe('recent sign-in for managing admins', () => {
+  const longAgo = { auth_time: Math.floor(Date.now() / 1000) - RECENT_SIGN_IN_MINUTES * 60 - 5 };
+
+  it('refuses each change from an older sign-in, with a code the app acts on', async () => {
+    const calls = [
+      () => post('/v1/admins', NEW_ADMIN, 'efua', env, longAgo),
+      () => send('PATCH', '/v1/admins/kofi', { role: 'primaryAdmin' }, 'efua', env, longAgo),
+      () => post('/v1/admins/kofi/deactivate', {}, 'efua', env, longAgo),
+      () => post('/v1/admins/kofi/reactivate', {}, 'efua', env, longAgo),
+      () => send('DELETE', '/v1/admins/kofi', undefined, 'efua', env, longAgo),
+    ];
+    for (const call of calls) {
+      const response = await call();
+      expect(response.status).toBe(403);
+      expect(await response.json()).toMatchObject({ code: RECENT_SIGN_IN_REQUIRED });
+    }
+    expect(firestore.docs.get('users/kofi')).toMatchObject({ role: 'admin' });
+    expect(accounts.has('kofi')).toBe(true);
+  });
+
+  it('still lists the admins from an older sign-in', async () => {
+    expect((await send('GET', '/v1/admins', undefined, 'efua', env, longAgo)).status).toBe(200);
+  });
+
+  it('tells a member they cannot, rather than asking them to sign in again', async () => {
+    const response = await post('/v1/admins', NEW_ADMIN, 'ama', env, longAgo);
+    expect(response.status).toBe(403);
+    expect(await response.json()).toEqual({ error: 'Only a Primary Admin can do this' });
   });
 });
 

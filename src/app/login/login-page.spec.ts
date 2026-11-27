@@ -230,14 +230,14 @@ describe('LoginPage', () => {
       expect(TestBed.inject(PendingGoogleLink).link()).toBeNull();
     });
 
-    it("never adds Google to an admin's account (FR-1.9)", async () => {
+    it("adds Google to an admin's account too (FR-1.9, NKB-213)", async () => {
       waiting();
       session.start.mockResolvedValue({ uid: 'kofi', role: 'admin' });
       const { logIn } = await render();
 
       await logIn('ama@example.com', 'correct horse');
 
-      expect(accounts.linkGoogle).not.toHaveBeenCalled();
+      expect(accounts.linkGoogle).toHaveBeenCalledWith(user, credential);
       expect(navigate).toHaveBeenCalledWith('/home');
     });
 

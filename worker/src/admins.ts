@@ -30,7 +30,7 @@ import {
   type Role,
 } from './model';
 import { passwordLink, SET_PASSWORD_LINK_HOURS } from './password-reset';
-import { ADMIN_ROLES, requirePrimaryAdmin } from './roles';
+import { ADMIN_ROLES, requirePrimaryAdmin, requireRecentSignIn } from './roles';
 import type { Account } from './users';
 
 // Admin accounts (FR-1.6, FR-1.7). The first Primary Admin comes from
@@ -54,6 +54,7 @@ export const MAX_NAME_LENGTH = 100;
  */
 export async function createAdmin(request: Request, env: Env, actor: Account): Promise<Response> {
   requirePrimaryAdmin(actor);
+  requireRecentSignIn(actor);
   const body = await readJson(request);
   const name = typeof body['name'] === 'string' ? body['name'].trim() : '';
   const email = typeof body['email'] === 'string' ? body['email'].trim().toLowerCase() : '';
@@ -187,6 +188,7 @@ export async function setAdminRole(
   uid: string,
 ): Promise<Response> {
   requirePrimaryAdmin(actor);
+  requireRecentSignIn(actor);
   const body = await readJson(request);
   const role = body['role'];
   if (role !== 'admin' && role !== 'primaryAdmin') {
@@ -231,6 +233,7 @@ export async function setAdminRole(
  */
 export async function deactivateAdmin(env: Env, actor: Account, uid: string): Promise<Response> {
   requirePrimaryAdmin(actor);
+  requireRecentSignIn(actor);
   await changeAdmin(env, actor, uid, (target, tx) => {
     if (markDeactivated(tx, uid, target)) {
       recordAudit(
@@ -264,6 +267,7 @@ export async function deactivateAdmin(env: Env, actor: Account, uid: string): Pr
  */
 export async function reactivateAdmin(env: Env, actor: Account, uid: string): Promise<Response> {
   requirePrimaryAdmin(actor);
+  requireRecentSignIn(actor);
   // An admin whose deletion stopped part-way has no account left to enable; marking them active
   // would only leave a record that cannot sign in.
   if (FIREBASE_UID.test(uid) && uid !== actor.uid && !(await lookupAccount(env, uid))) {
@@ -302,6 +306,7 @@ export async function reactivateAdmin(env: Env, actor: Account, uid: string): Pr
  */
 export async function deleteAdmin(env: Env, actor: Account, uid: string): Promise<Response> {
   requirePrimaryAdmin(actor);
+  requireRecentSignIn(actor);
   const email = await changeAdmin(env, actor, uid, (target, tx) => {
     markDeactivated(tx, uid, target);
     return optionalString(target['email']);

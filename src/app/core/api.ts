@@ -15,11 +15,15 @@ export const API_URL = new InjectionToken<string>('API_URL', {
   factory: () => environment.apiUrl,
 });
 
-/** A failed call to the Worker: its HTTP status (0 if it could not be reached) and message. */
+/**
+ * A failed call to the Worker: its HTTP status (0 if it could not be reached), message, and the
+ * code the Worker gave with it, if any (such as RECENT_SIGN_IN_REQUIRED, core/recent-sign-in.ts).
+ */
 export class ApiError extends Error {
   constructor(
     readonly status: number,
     message: string,
+    readonly code?: string,
   ) {
     super(message);
   }
@@ -62,7 +66,7 @@ export class Api {
     const timer = setTimeout(() => controller.abort(), API_TIMEOUT_MS);
 
     let response: Response;
-    let data: { error?: string };
+    let data: { error?: string; code?: string };
     try {
       // Getting the ID token can need the network too, to renew an old one.
       if (user) {
@@ -80,7 +84,7 @@ export class Api {
           throw error;
         }
         return {}; // No JSON body, as with 204.
-      })) as { error?: string };
+      })) as { error?: string; code?: string };
     } catch {
       throw new ApiError(0, UNREACHABLE);
     } finally {
@@ -90,7 +94,7 @@ export class Api {
       this.onUnauthorized?.();
     }
     if (!response.ok) {
-      throw new ApiError(response.status, data.error ?? SOMETHING_WENT_WRONG);
+      throw new ApiError(response.status, data.error ?? SOMETHING_WENT_WRONG, data.code);
     }
     return data as T;
   }

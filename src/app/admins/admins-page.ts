@@ -2,6 +2,7 @@ import { Component, inject, OnInit, PendingTasks, signal } from '@angular/core';
 import { RouterLink } from '@angular/router';
 
 import { Api, ApiError } from '../core/api';
+import { RecentSignIn } from '../core/recent-sign-in';
 import { SOMETHING_WENT_WRONG } from '../core/messages';
 
 /** An admin as GET /v1/admins lists them (AdminSummary in worker/src/admins.ts). */
@@ -60,6 +61,7 @@ type State = 'loading' | 'ready' | 'denied' | 'error';
 })
 export class AdminsPage implements OnInit {
   private readonly api = inject(Api);
+  private readonly recentSignIn = inject(RecentSignIn);
   private readonly pendingTasks = inject(PendingTasks);
 
   protected readonly state = signal<State>('loading');
@@ -126,7 +128,7 @@ export class AdminsPage implements OnInit {
     return this.act(
       admin,
       () => this.api.post(`/v1/admins/${admin.uid}/reactivate`),
-      `${name} has been reactivated and can log in again with their password.`,
+      `${name} has been reactivated and can log in again.`,
     );
   }
 
@@ -151,7 +153,8 @@ export class AdminsPage implements OnInit {
     this.done.set(null);
     this.error.set(null);
     try {
-      await call();
+      // Managing admins needs a recent sign-in, which this asks for if needed (NKB-213).
+      await this.recentSignIn.run(call);
       this.done.set(success);
     } catch (error) {
       this.error.set(

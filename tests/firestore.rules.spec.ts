@@ -294,8 +294,14 @@ describe('role-based access', () => {
     await assertFails(getDoc(doc(unverified, MEMBERS, 'ama')));
   });
 
-  it('denies an admin who signed in any way but email and password (FR-1.9)', async () => {
-    for (const provider of ['google.com', 'facebook.com', 'custom']) {
+  it('gives an admin signed in with Google their admin reads (FR-1.9, NKB-213)', async () => {
+    const db = as('efua', { role: 'admin', firebase: { sign_in_provider: 'google.com' } });
+    await assertSucceeds(getDoc(doc(db, MEMBERS, 'ama')));
+    await assertSucceeds(getDocs(collection(db, USERS)));
+  });
+
+  it('denies an admin who signed in any way but email and password or Google (FR-1.9)', async () => {
+    for (const provider of ['facebook.com', 'custom', 'anonymous']) {
       const db = as('efua', { role: 'admin', firebase: { sign_in_provider: provider } });
       await assertFails(getDoc(doc(db, MEMBERS, 'ama')));
       await assertFails(getDocs(collection(db, USERS)));

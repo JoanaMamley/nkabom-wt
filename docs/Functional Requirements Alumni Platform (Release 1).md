@@ -18,7 +18,7 @@ Functional requirements, Release 1. 17 October 2026.
 - **FR-1.6** The first Primary Admin account is created during initial system setup. A Primary Admin can create admin accounts by entering a name, a login email, and the Google account email to use for the birthday calendar (which can be the same address), and can deactivate or delete admin accounts.
 - **FR-1.7** A Primary Admin can promote an existing admin to Primary Admin, and can demote another Primary Admin to a normal admin. The system never allows the last Primary Admin to be demoted or deleted.
 - **FR-1.8** When an admin account is created, the system emails a one-time, expiring link for the new admin to set their password before first login.
-- **FR-1.9** Admins log in with email and password only, not social login.
+- **FR-1.9** Admins log in with email and password, or with Google once Google is linked to their admin account. Managing admins needs a recent sign-in, and an admin is emailed the first time Google is used on their account.
 - **FR-1.10** Sessions expire after inactivity, and admin sessions are shorter than member sessions.
 - **FR-1.11** Admin routes and APIs are enforced server-side, not only hidden in the UI.
 - **FR-1.12** Nothing on the site is visible before login except four pages: login, sign-up, the privacy notice, and the terms of service (added with NKB-212, so anyone can read the terms before signing up). Every other page and API requires an authenticated session.

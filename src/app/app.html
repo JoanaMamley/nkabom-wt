@@ -29,6 +29,9 @@
   }
 </div>
 
+<!-- Asks the user to sign in again when an action needs a recent sign-in (NKB-213). -->
+<app-confirm-sign-in />
+
 @if (updates.ready()) {
   <div class="update" role="status">
     <span>A new version of Nkabom is ready.</span>
